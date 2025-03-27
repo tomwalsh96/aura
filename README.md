@@ -10,7 +10,17 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Set up environment variables
+
+   Copy the `.env.example` file to `.env` and update the variables:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Then edit the `.env` file and add your Google Cloud API key.
+
+3. Start the app
 
    ```bash
     npx expo start
@@ -24,6 +34,17 @@ In the output, you'll find options to open the app in a
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+
+## Setting up Google Cloud Speech-to-Text API
+
+1. Visit [Google Cloud Console](https://console.cloud.google.com/) and create a new project
+2. Enable the Speech-to-Text API for your project in the "APIs & Services" section
+3. Create an API key in the "APIs & Services" > "Credentials" section
+4. Add your API key to the `.env` file:
+   ```
+   GOOGLE_CLOUD_SPEECH_TO_TEXT_API_KEY=your_api_key_here
+   ```
+5. For better security, consider restricting your API key in the Google Cloud Console
 
 ## Get a fresh project
 
