@@ -19,6 +19,13 @@ export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    clientId: process.env.FIREBASE_API_KEY,
+    iosClientId: process.env.FIREBASE_APP_ID,
+    androidClientId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    webClientId: process.env.FIREBASE_AUTH_DOMAIN,
+  });
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
@@ -48,13 +55,6 @@ export function useAuth() {
 
   const signInWithGoogle = async () => {
     try {
-      const [request, response, promptAsync] = Google.useAuthRequest({
-        clientId: 'YOUR_GOOGLE_CLIENT_ID', // You'll need to add this
-        iosClientId: 'YOUR_IOS_CLIENT_ID', // You'll need to add this
-        androidClientId: 'YOUR_ANDROID_CLIENT_ID', // You'll need to add this
-        webClientId: 'YOUR_WEB_CLIENT_ID', // You'll need to add this
-      });
-
       const result = await promptAsync();
       
       if (result?.type === 'success') {

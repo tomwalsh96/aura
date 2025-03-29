@@ -13,6 +13,7 @@ import {
 import { useAuth } from '../../../hooks/useAuth';
 import { Ionicons } from '@expo/vector-icons';
 import { ErrorMessage } from '../../../components/ui/ErrorMessage';
+import Constants from 'expo-constants';
 
 export function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -21,6 +22,8 @@ export function AuthScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { signIn, signUp, signInWithGoogle } = useAuth();
+
+  const isProduction = Constants.appOwnership === 'expo' && !__DEV__;
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -114,20 +117,24 @@ export function AuthScreen() {
             )}
           </TouchableOpacity>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
+          {isProduction && (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
+              </View>
 
-          <TouchableOpacity
-            style={[styles.googleButton, isLoading && styles.buttonDisabled]}
-            onPress={handleGoogleSignIn}
-            disabled={isLoading}
-          >
-            <Ionicons name="logo-google" size={24} color="#DB4437" />
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.googleButton, isLoading && styles.buttonDisabled]}
+                onPress={handleGoogleSignIn}
+                disabled={isLoading}
+              >
+                <Ionicons name="logo-google" size={24} color="#DB4437" />
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </TouchableOpacity>
+            </>
+          )}
 
           <TouchableOpacity
             style={styles.switchButton}

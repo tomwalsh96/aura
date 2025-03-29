@@ -61,7 +61,7 @@ export function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {error && <ErrorMessage message={error} />}
+      {error && <ErrorMessage error={error} />}
 
       <TouchableOpacity
         style={styles.logoutButton}

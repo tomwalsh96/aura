@@ -10,9 +10,6 @@ interface ErrorMessageProps {
 export const ErrorMessage: React.FC<ErrorMessageProps> = ({ error, style }) => {
   if (!error) return null;
 
-  console.log('error', error);
-  console.log('here');
-
   return (
     <View style={[styles.container, style]}>
       <Text style={styles.text}>{getReadableErrorMessage(error)}</Text>

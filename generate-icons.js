@@ -40,5 +40,3 @@ fs.copyFileSync(
   path.join(__dirname, 'assets', 'icon.png'),
   path.join(__dirname, 'assets', 'favicon.png')
 );
-
-console.log('Icons generated successfully!'); 
