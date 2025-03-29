@@ -1,23 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  Alert,
 } from 'react-native';
 import { useAuth } from '../../../hooks/useAuth';
 import { Ionicons } from '@expo/vector-icons';
+import { ErrorMessage } from '../../../components/ui/ErrorMessage';
 
 export function ProfileScreen() {
   const { user, logout } = useAuth();
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogout = async () => {
     try {
       await logout();
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      setError(error.message);
     }
   };
 
@@ -59,6 +60,8 @@ export function ProfileScreen() {
           <Ionicons name="chevron-forward" size={24} color="#717171" />
         </TouchableOpacity>
       </View>
+
+      {error && <ErrorMessage message={error} />}
 
       <TouchableOpacity
         style={styles.logoutButton}

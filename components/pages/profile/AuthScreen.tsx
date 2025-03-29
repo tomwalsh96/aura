@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -13,21 +12,24 @@ import {
 } from 'react-native';
 import { useAuth } from '../../../hooks/useAuth';
 import { Ionicons } from '@expo/vector-icons';
+import { ErrorMessage } from '../../../components/ui/ErrorMessage';
 
 export function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { signIn, signUp, signInWithGoogle } = useAuth();
 
   const handleAuth = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields');
+      setError('Please fill in all fields');
       return;
     }
 
     setIsLoading(true);
+    setError(null);
     try {
       if (isSignUp) {
         await signUp(email, password);
@@ -35,7 +37,7 @@ export function AuthScreen() {
         await signIn(email, password);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      setError(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -43,10 +45,11 @@ export function AuthScreen() {
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       await signInWithGoogle();
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      setError(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -94,6 +97,8 @@ export function AuthScreen() {
               autoComplete="password"
             />
           </View>
+
+          {error && <ErrorMessage error={error} />}
 
           <TouchableOpacity
             style={[styles.button, isLoading && styles.buttonDisabled]}
