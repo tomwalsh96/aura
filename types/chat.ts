@@ -3,7 +3,7 @@
  */
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'model' | 'assistant';
   content: string;
   timestamp: number;
 }

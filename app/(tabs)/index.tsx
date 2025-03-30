@@ -2,19 +2,23 @@ import React, { useState } from 'react';
 import { View, FlatList, StyleSheet, TextInput, TouchableOpacity, Text, ActivityIndicator, ScrollView } from 'react-native';
 import { BusinessListItem } from '../../components/pages/explore/BusinessListItem';
 import { dummyBusinesses } from '../../data/dummyBusinesses';
-import { Business, BusinessType } from '../../types/business';
+import { Business } from '../../types/business';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-const categories: { id: BusinessType; label: string; icon: keyof typeof Ionicons.glyphMap; color: string }[] = [
-  { id: BusinessType.BARBERSHOP, label: 'Barbershop', icon: 'cut', color: '#A8D1FF' },
-  { id: BusinessType.HAIR_SALON, label: 'Hair Salon', icon: 'water', color: '#FFB6D9' },
+const categories: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap; color: string }[] = [
+  { id: 'barbershop', label: 'Barbershop', icon: 'cut', color: '#A8D1FF' },
+  { id: 'salon', label: 'Hair Salon', icon: 'water', color: '#FFB6D9' },
+  { id: 'spa', label: 'Spa', icon: 'sparkles', color: '#FFD6A5' },
+  { id: 'nails', label: 'Nails', icon: 'hand-left', color: '#FFA5A5' },
+  { id: 'massage', label: 'Massage', icon: 'fitness', color: '#A5FFA5' },
+  { id: 'wellness', label: 'Wellness', icon: 'leaf', color: '#A5FFD6' }
 ];
 
 export default function ExploreScreen() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<BusinessType | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const handleBusinessPress = (business: Business) => {
@@ -25,10 +29,8 @@ export default function ExploreScreen() {
   };
 
   const filteredBusinesses = dummyBusinesses.filter(business => {
-    const matchesSearch = business.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         business.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = !selectedCategory || business.type === selectedCategory;
-    return matchesSearch && matchesCategory;
+    return business.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           business.description.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
   const onRefresh = React.useCallback(() => {

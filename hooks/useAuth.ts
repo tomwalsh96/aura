@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { auth } from '../firebase-config';
+import { auth, db } from '../firebase-config';
 import { 
   getAuth, 
   onAuthStateChanged, 
@@ -9,8 +9,10 @@ import {
   GoogleAuthProvider,
   signOut,
   deleteUser,
-  User
+  User,
+  updateProfile as firebaseUpdateProfile
 } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -85,6 +87,24 @@ export function useAuth() {
     }
   };
 
+  const updateProfile = async ({ displayName, photoURL }: { displayName?: string; photoURL?: string }) => {
+    if (!user) throw new Error('No user logged in');
+
+    // Update Firebase Auth profile
+    await firebaseUpdateProfile(user, {
+      displayName,
+      photoURL: photoURL ? `assets/avatars/${photoURL}` : user.photoURL
+    });
+
+    // Update user data in Firestore
+    const userRef = doc(db, 'users', user.uid);
+    await setDoc(userRef, {
+      displayName: displayName || user.displayName,
+      avatarLocation: photoURL || user.photoURL?.split('/').pop(),
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  };
+
   return {
     user,
     loading,
@@ -93,5 +113,6 @@ export function useAuth() {
     signInWithGoogle,
     logout,
     deleteAccount,
+    updateProfile,
   };
 } 

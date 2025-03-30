@@ -1,38 +1,56 @@
-export enum BusinessType {
-  HAIR_SALON = 'HAIR_SALON',
-  NAIL_SALON = 'NAIL_SALON',
-  SPA = 'SPA',
-  MASSAGE = 'MASSAGE',
-  BEAUTY_SALON = 'BEAUTY_SALON',
-  BARBERSHOP = 'BARBERSHOP',
-  WELLNESS_CENTRE = 'WELLNESS_CENTRE',
-  AESTHETICS_CLINIC = 'AESTHETICS_CLINIC',
-  YOGA_STUDIO = 'YOGA_STUDIO',
-  FITNESS_CENTRE = 'FITNESS_CENTRE',
-  TATTOO_STUDIO = 'TATTOO_STUDIO',
-  BROW_BAR = 'BROW_BAR',
-  LASH_STUDIO = 'LASH_STUDIO',
-  TANNING_SALON = 'TANNING_SALON',
-  OTHER = 'OTHER'
-}
-
-export interface Service {
-  name: string;
-  price: number;
-  duration: string;
-}
-
 export interface Business {
   id: string;
   name: string;
-  imageUrl: string;
+  description: string;
+  address: string;
   rating: number;
   reviews: number;
-  description: string;
-  services: Service[];
+  imageUrl: string;
+  type: string;
   openingHours: {
     [key: string]: string;
   };
-  address: string;
-  type: BusinessType;
+}
+
+export interface BusinessWithDetails extends Business {
+  staff: StaffMember[];
+  services: Service[];
+  timeSlots: TimeSlot[];
+  bookings: Booking[];
+}
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  role: string;
+  imageUrl: string;
+  bio: string;
+  specialties: string[];
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  price: number;
+  duration: string;
+  description: string;
+  staffIds: string[];
+}
+
+export interface TimeSlot {
+  id: string;
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+  staffId: string;
+}
+
+export interface Booking {
+  id: string;
+  customerId: string;
+  staffId: string;
+  serviceId: string;
+  date: string;
+  timeSlotId: string;
+  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
 } 

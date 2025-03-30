@@ -3,13 +3,13 @@ import { View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../../hooks/useAuth';
 import { AuthScreen } from '../../../components/pages/profile/AuthScreen';
-import { ProfileScreen } from '../../../components/pages/profile/ProfileScreen';
+import ProfileScreen from '../../../components/pages/profile/ProfileScreen';
 
 export default function ProfileTab() {
   const { user } = useAuth();
   const router = useRouter();
 
-  // Ensure we're on the profile tab
+  // Reset to base profile route when component mounts
   React.useEffect(() => {
     router.setParams({});
   }, []);

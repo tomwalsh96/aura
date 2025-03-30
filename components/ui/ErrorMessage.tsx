@@ -1,29 +1,29 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { getReadableErrorMessage } from '../../utils/errorMessages';
 
 interface ErrorMessageProps {
-  error: any;
-  style?: any;
+  error: Error | string;
 }
 
-export const ErrorMessage: React.FC<ErrorMessageProps> = ({ error, style }) => {
-  if (!error) return null;
-
+export function ErrorMessage({ error }: ErrorMessageProps) {
+  const errorMessage = error instanceof Error ? error.message : error;
+  
   return (
-    <View style={[styles.container, style]}>
-      <Text style={styles.text}>{getReadableErrorMessage(error)}</Text>
+    <View style={styles.container}>
+      <Text style={styles.text}>{errorMessage}</Text>
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
-    paddingLeft: 10,
-    paddingRight: 10,
+    backgroundColor: '#FFE5E5',
+    padding: 12,
+    borderRadius: 8,
+    margin: 16,
   },
   text: {
-    color: '#DC2626',
+    color: '#FF3B30',
     fontSize: 14,
     lineHeight: 20,
   },

@@ -10,7 +10,7 @@ export default function TabLayout() {
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: '#4A90E2',
-          tabBarInactiveTintColor: '#8E8E93',
+          tabBarInactiveTintColor: '#717171',
           tabBarStyle: {
             backgroundColor: '#fff',
             borderTopWidth: 1,
@@ -22,9 +22,9 @@ export default function TabLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Explore',
+            title: 'Home',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="compass-outline" size={size} color={color} />
+              <Ionicons name="home-outline" size={size} color={color} />
             ),
           }}
         />
@@ -33,7 +33,16 @@ export default function TabLayout() {
           options={{
             title: 'Chat',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />
+              <Ionicons name="chatbubble-outline" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="chat-v2/index"
+          options={{
+            title: 'Chat V2',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="chatbubbles-outline" size={size} color={color} />
             ),
           }}
         />
