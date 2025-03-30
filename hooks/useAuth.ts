@@ -8,6 +8,7 @@ import {
   signInWithCredential,
   GoogleAuthProvider,
   signOut,
+  deleteUser,
   User
 } from 'firebase/auth';
 import * as Google from 'expo-auth-session/providers/google';
@@ -75,6 +76,15 @@ export function useAuth() {
     }
   };
 
+  const deleteAccount = async () => {
+    try {
+      if (!user) throw new Error('No user logged in');
+      await deleteUser(user);
+    } catch (error) {
+      throw error;
+    }
+  };
+
   return {
     user,
     loading,
@@ -82,5 +92,6 @@ export function useAuth() {
     signUp,
     signInWithGoogle,
     logout,
+    deleteAccount,
   };
 } 
