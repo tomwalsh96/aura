@@ -85,3 +85,7 @@ yarn-error.log*
 
 # Local Netlify folder
 .netlify
+
+# Firebase
+.firebase/
+firebase-debug.log
