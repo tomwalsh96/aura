@@ -3,13 +3,18 @@ export interface Business {
   name: string;
   description: string;
   address: string;
+  city: string;
   rating: number;
   reviews: number;
   imageUrl: string;
   type: string;
-  openingHours: {
-    [key: string]: string;
-  };
+  openingHours: Record<string, string>;
+}
+
+export interface BusinessSelectionState {
+  selectedBusiness: Business | null;
+  selectionConfirmed: boolean;
+  selectionTimestamp: number | null;
 }
 
 export interface BusinessWithDetails extends Business {
@@ -47,7 +52,6 @@ export interface TimeSlot {
 
 export interface Booking {
   id: string;
-  customerId: string;
   staffId: string;
   serviceId: string;
   date: string;

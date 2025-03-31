@@ -19,7 +19,6 @@ interface TimeSlot {
 
 interface Booking {
   id: string;
-  customerId: string;
   staffId: string;
   serviceId: string;
   date: string;
@@ -42,6 +41,7 @@ interface BusinessWithDetails extends Business {
   timeSlots: TimeSlot[];
   bookings: Booking[];
   type: string;
+  city: string;
 }
 
 export const dummyBusinesses: BusinessWithDetails[] = [
@@ -49,7 +49,8 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     id: 'e8f7d9c2-3a1b-4e5f-8c9d-2b3a4f5e6d7c',
     name: "Shear Madness",
     description: "Traditional salon where we promise not to talk about your receding hairline... unless you bring it up first",
-    address: "15 Grafton Street, Dublin 2",
+    address: "15 Grafton Street",
+    city: "Dublin",
     rating: 4.8,
     reviews: 156,
     imageUrl: "https://images.unsplash.com/photo-1585747860715-2ba37e788b70",
@@ -124,7 +125,6 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     bookings: [
       {
         id: "booking1",
-        customerId: "customer10",
         staffId: "staff1",
         serviceId: "service2",
         date: "2024-03-30",
@@ -146,7 +146,8 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     id: 'a1b2c3d4-5e6f-7g8h-9i0j-k1l2m3n4o5p6',
     name: "Style & Grace",
     description: "Upscale salon where your hair transformation costs less than a therapy session (but works just as well)",
-    address: "42 Henry Street, Dublin 1",
+    address: "42 Henry Street",
+    city: "Dublin",
     rating: 4.9,
     reviews: 203,
     imageUrl: "https://images.unsplash.com/photo-1560066984-138dadb4c035",
@@ -221,7 +222,6 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     bookings: [
       {
         id: "booking1",
-        customerId: "customer2",
         staffId: "staff1",
         serviceId: "service2",
         date: "2024-03-30",
@@ -243,7 +243,8 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     id: 'b2c3d4e5-6f7g-8h9i-0j1k-l2m3n4o5p6q7',
     name: "Urban Edge Barbers",
     description: "Where we turn 'I just want a trim' into 'Who's that model in the mirror?'",
-    address: "28 South William Street, Dublin 2",
+    address: "28 South William Street",
+    city: "Dublin",
     rating: 4.7,
     reviews: 128,
     imageUrl: "https://images.unsplash.com/photo-1503951914875-452162b0f3f1",
@@ -318,7 +319,6 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     bookings: [
       {
         id: "booking1",
-        customerId: "customer3",
         staffId: "staff1",
         serviceId: "service1",
         date: "2024-03-30",
@@ -340,7 +340,8 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     id: 'c3d4e5f6-7g8h-9i0j-1k2l-m3n4o5p6q7r8',
     name: "Curl Up & Dye",
     description: "The only place where 'I want something different' doesn't end in tears",
-    address: "12 Wicklow Street, Dublin 2",
+    address: "12 Patrick Street",
+    city: "Cork",
     rating: 4.6,
     reviews: 189,
     imageUrl: "https://images.unsplash.com/photo-1522337660859-02fbefca4702",
@@ -415,7 +416,6 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     bookings: [
       {
         id: "booking1",
-        customerId: "customer2",
         staffId: "staff1",
         serviceId: "service2",
         date: "2024-03-30",
@@ -437,7 +437,8 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     id: 'd4e5f6g7-8h9i-0j1k-2l3m-n4o5p6q7r8s9',
     name: "The Mane Event",
     description: "Making bad hair days extinct since 2010 (except during hurricanes, we're not magicians)",
-    address: "8 Dawson Street, Dublin 2",
+    address: "8 Shop Street",
+    city: "Galway",
     rating: 4.9,
     reviews: 245,
     imageUrl: "https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1",
@@ -512,7 +513,6 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     bookings: [
       {
         id: "booking1",
-        customerId: "customer3",
         staffId: "staff1",
         serviceId: "service1",
         date: "2024-03-30",
@@ -534,7 +534,8 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     id: 'e5f6g7h8-9i0j-1k2l-3m4n-o5p6q7r8s9t0',
     name: "Shear Genius",
     description: "We're not saying we're better than Einstein, but have you seen his hair?",
-    address: "24 Drury Street, Dublin 2",
+    address: "24 O'Connell Street",
+    city: "Limerick",
     rating: 4.8,
     reviews: 167,
     imageUrl: "https://images.unsplash.com/photo-1622288432450-277d0fef5ed6",
@@ -601,7 +602,6 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     bookings: [
       {
         id: "booking1",
-        customerId: "customer9",
         staffId: "staff1",
         serviceId: "service1",
         date: "2024-03-30",
@@ -623,7 +623,8 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     id: 'f6g7h8i9-0j1k-2l3m-4n5o-p6q7r8s9t0u1',
     name: "Mullet Over",
     description: "Business in the front, party in the back, laughs all around",
-    address: "16 Fade Street, Dublin 2",
+    address: "16 Quay Street",
+    city: "Waterford",
     rating: 4.5,
     reviews: 142,
     imageUrl: "https://images.unsplash.com/photo-1584316712724-f5d4b188fee2",
@@ -698,7 +699,6 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     bookings: [
       {
         id: "booking1",
-        customerId: "customer5",
         staffId: "staff1",
         serviceId: "service2",
         date: "2024-03-30",
@@ -720,7 +720,8 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     id: 'g7h8i9j0-1k2l-3m4n-5o6p-q7r8s9t0u1v2',
     name: "Scissors of Oz",
     description: "Follow the highlighted road to fabulous hair (No ruby slippers required)",
-    address: "33 Clarendon Street, Dublin 2",
+    address: "33 Shop Street",
+    city: "Galway",
     rating: 4.7,
     reviews: 198,
     imageUrl: "https://images.unsplash.com/photo-1562322140-8baeececf3df",
@@ -795,7 +796,6 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     bookings: [
       {
         id: "booking1",
-        customerId: "customer6",
         staffId: "staff1",
         serviceId: "service1",
         date: "2024-03-30",
@@ -817,7 +817,8 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     id: 'h8i9j0k1-2l3m-4n5o-6p7q-r8s9t0u1v2w3',
     name: "The Buzz Lightyear",
     description: "To infinity and beyond... but first, let's fix that bedhead",
-    address: "5 Chatham Street, Dublin 2",
+    address: "5 William Street",
+    city: "Cork",
     rating: 4.6,
     reviews: 176,
     imageUrl: "https://images.unsplash.com/photo-1599351431202-1e0f0137899a",
@@ -892,7 +893,6 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     bookings: [
       {
         id: "booking1",
-        customerId: "customer7",
         staffId: "staff1",
         serviceId: "service2",
         date: "2024-03-30",
@@ -950,7 +950,6 @@ export async function getServices(businessId: string): Promise<Service[]> {
 
 export async function createBooking(
   businessId: string,
-  customerId: string,
   staffId: string,
   serviceId: string,
   date: string,
@@ -970,7 +969,6 @@ export async function createBooking(
   
   const newBooking: Booking = {
     id: `booking${Date.now()}`,
-    customerId,
     staffId,
     serviceId,
     date,

@@ -1,16 +1,17 @@
 import * as Location from 'expo-location';
-import { Alert, Linking, Platform } from 'react-native';
 
 export interface LocationData {
+  city: string;
+  country: string;
+}
+
+export interface Coordinates {
   latitude: number;
   longitude: number;
-  accuracy: number;
-  timestamp: number;
 }
 
 export class LocationService {
   private static instance: LocationService;
-  private locationSubscription: Location.LocationSubscription | null = null;
 
   private constructor() {}
 
@@ -23,43 +24,12 @@ export class LocationService {
 
   async requestPermission(): Promise<boolean> {
     try {
-      // First check if we already have permission
       const { status: currentStatus } = await Location.getForegroundPermissionsAsync();
       if (currentStatus === 'granted') {
         return true;
       }
 
-      // Request permission if we don't have it
       const { status } = await Location.requestForegroundPermissionsAsync();
-      
-      // If permission is denied, show modal to guide user to settings
-      if (status === 'denied') {
-        return new Promise((resolve) => {
-          Alert.alert(
-            "Location Services",
-            "You previously denied location services. Please manually enable them in your device settings.",
-            [
-              {
-                text: "Cancel",
-                style: "cancel",
-                onPress: () => resolve(false)
-              },
-              {
-                text: "Open Settings",
-                onPress: () => {
-                  if (Platform.OS === 'ios') {
-                    Linking.openURL('app-settings:');
-                  } else {
-                    Linking.openSettings();
-                  }
-                  resolve(false);
-                }
-              }
-            ]
-          );
-        });
-      }
-
       return status === 'granted';
     } catch (error) {
       console.error('Error requesting location permission:', error);
@@ -77,10 +47,11 @@ export class LocationService {
     }
   }
 
-  async getCurrentLocation(): Promise<LocationData> {
+  async getCurrentLocation(): Promise<Coordinates> {
     try {
-      const hasPermission = await this.checkPermission();
-      if (!hasPermission) {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      
+      if (status !== 'granted') {
         const granted = await this.requestPermission();
         if (!granted) {
           throw new Error('Location permission denied');
@@ -93,9 +64,7 @@ export class LocationService {
 
       return {
         latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        accuracy: location.coords.accuracy ?? 0,
-        timestamp: location.timestamp,
+        longitude: location.coords.longitude
       };
     } catch (error) {
       console.error('Error getting current location:', error);
@@ -103,75 +72,55 @@ export class LocationService {
     }
   }
 
-  async getLocationFromAddress(address: string): Promise<LocationData> {
+  async getClosestCityToUser(): Promise<LocationData> {
     try {
-      const hasPermission = await this.checkPermission();
-      if (!hasPermission) {
-        const granted = await this.requestPermission();
-        if (!granted) {
-          throw new Error('Location permission denied');
+      // First check if location services are enabled
+      const enabled = await Location.hasServicesEnabledAsync();
+      if (!enabled) {
+        throw new Error('Location services are disabled. Please enable them in your device settings.');
+      }
+
+      // Check current permission status
+      const { status: currentStatus } = await Location.getForegroundPermissionsAsync();
+      console.log('Current permission status:', currentStatus);
+
+      // If not granted, request permission
+      if (currentStatus !== 'granted') {
+        console.log('Requesting location permission...');
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        console.log('Permission request result:', status);
+        
+        if (status !== 'granted') {
+          throw new Error('Location permission denied. Please enable location access in your device settings.');
         }
       }
 
-      const locations = await Location.geocodeAsync(address);
-      if (locations.length === 0) {
-        throw new Error('No location found for address');
+      // Get current position with high accuracy
+      console.log('Getting current position...');
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      console.log('Got position:', location);
+
+      // Reverse geocode to get city
+      console.log('Reverse geocoding coordinates...');
+      const [address] = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+      console.log('Reverse geocode result:', address);
+
+      if (!address?.city) {
+        throw new Error('Could not determine city from location. Please try again or check your location settings.');
       }
 
-      const location = locations[0];
       return {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy: 0, // Geocoding doesn't provide accuracy
-        timestamp: Date.now(),
+        city: address.city,
+        country: address.country || 'Ireland'
       };
     } catch (error) {
-      console.error('Error getting location from address:', error);
+      console.error('Error in getClosestCityToUser:', error);
       throw error;
     }
   }
-
-  calculateDistance(location1: LocationData, location2: LocationData): number {
-    const R = 6371e3; // Earth's radius in metres
-    const φ1 = (location1.latitude * Math.PI) / 180;
-    const φ2 = (location2.latitude * Math.PI) / 180;
-    const Δφ = ((location2.latitude - location1.latitude) * Math.PI) / 180;
-    const Δλ = ((location2.longitude - location1.longitude) * Math.PI) / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in metres
-  }
-
-  async startLocationUpdates(callback: (location: LocationData) => void): Promise<void> {
-    if (this.locationSubscription) {
-      this.stopLocationUpdates();
-    }
-
-    this.locationSubscription = await Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.Balanced,
-        timeInterval: 5000,
-        distanceInterval: 10,
-      },
-      (location) => {
-        callback({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          accuracy: location.coords.accuracy ?? 0,
-          timestamp: location.timestamp,
-        });
-      }
-    );
-  }
-
-  stopLocationUpdates(): void {
-    if (this.locationSubscription) {
-      this.locationSubscription.remove();
-      this.locationSubscription = null;
-    }
-  }
-} 
+}
