@@ -765,6 +765,104 @@ export const dummyBusinesses: BusinessWithDetails[] = [
       "Saturday": "10:00 AM - 6:00 PM",
       "Sunday": "Closed"
     }
+  },
+  {
+    id: 'i9j0k1l2-3m4n-5o6p-7q8r-s9t0u1v2w3x4',
+    name: "Serenity Wellness Centre",
+    description: "Your sanctuary for relaxation and rejuvenation in the heart of Dublin",
+    address: "45 Merrion Square",
+    city: "Dublin",
+    rating: 4.9,
+    reviews: 312,
+    imageUrl: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874",
+    type: "wellness",
+    staff: [
+      {
+        id: "550e8400-e29b-41d4-a716-446655440025",
+        name: "Dr. Sarah O'Connor",
+        role: "Senior Wellness Practitioner",
+        imageUrl: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2",
+        bio: "15 years of experience in therapeutic treatments",
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440026",
+        name: "Michael Murphy",
+        role: "Wellness Specialist",
+        imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
+        bio: "Specialist in sports therapy and deep tissue treatments",
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Saturday"]
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440027",
+        name: "Emma Walsh",
+        role: "Aromatherapy Expert",
+        imageUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
+        bio: "Certified aromatherapist with expertise in holistic treatments",
+        workingDays: ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+      }
+    ],
+    services: [
+      {
+        id: "550e8400-e29b-41d4-a716-446655440052",
+        name: "Therapeutic Treatment",
+        price: 90,
+        duration: 60,
+        description: "Professional therapeutic treatment with aromatherapy oils",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440025"]
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440053",
+        name: "Sports Therapy",
+        price: 85,
+        duration: 60,
+        description: "Specialized treatment for sports-related muscle tension",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440026"]
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440054",
+        name: "Aromatherapy Treatment",
+        price: 95,
+        duration: 60,
+        description: "Holistic treatment using essential oils and gentle techniques",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440027"]
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440055",
+        name: "Deep Tissue Treatment",
+        price: 100,
+        duration: 60,
+        description: "Intensive treatment for chronic muscle tension",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440026"]
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440056",
+        name: "Wellness Consultation",
+        price: 75,
+        duration: 45,
+        description: "Personalized wellness assessment and treatment plan",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440025"]
+      }
+    ],
+    bookings: [
+      {
+        id: "550e8400-e29b-41d4-a716-446655440028",
+        staffId: "550e8400-e29b-41d4-a716-446655440025",
+        serviceId: "550e8400-e29b-41d4-a716-446655440052",
+        date: "2024-03-30",
+        startTime: "14:00",
+        duration: 60
+      }
+    ],
+    openingHours: {
+      "Monday": "9:00 AM - 8:00 PM",
+      "Tuesday": "9:00 AM - 8:00 PM",
+      "Wednesday": "9:00 AM - 8:00 PM",
+      "Thursday": "9:00 AM - 8:00 PM",
+      "Friday": "9:00 AM - 8:00 PM",
+      "Saturday": "10:00 AM - 6:00 PM",
+      "Sunday": "Closed"
+    }
   }
 ];
 
@@ -924,4 +1022,112 @@ export async function cancelBooking(businessId: string, bookingId: string): Prom
   
   business.bookings.splice(bookingIndex, 1);
   return true;
+}
+
+export async function findAvailableSlotsForService(
+  businessName: string,
+  serviceName: string,
+  date: string,
+  staffName?: string
+): Promise<{ staffName: string, startTime: string, endTime: string }[]> {
+  await new Promise(resolve => setTimeout(resolve, 500));
+  const business = dummyBusinesses.find(b => b.name === businessName);
+  if (!business) return [];
+  
+  const service = business.services.find(s => s.name === serviceName);
+  if (!service) return [];
+  
+  // Get the day of the week from the date
+  const dayOfWeek = new Date(date).toLocaleDateString('en-IE', { weekday: 'long' });
+  
+  // Get all bookings for the date
+  const dateBookings = business.bookings.filter(booking => booking.date === date);
+  
+  // Get relevant staff members
+  const relevantStaff = staffName 
+    ? business.staff.filter(s => s.name === staffName)
+    : business.staff.filter(s => service.staffIds.includes(s.id));
+  
+  const availableSlots: { staffName: string, startTime: string, endTime: string }[] = [];
+  
+  // For each staff member
+  relevantStaff.forEach(staff => {
+    // Check if staff member works on this day
+    if (!staff.workingDays.includes(dayOfWeek)) return;
+    
+    // Get business opening hours for this day
+    const openingHours = business.openingHours[dayOfWeek];
+    if (!openingHours) return;
+    
+    // Parse opening hours
+    const [openTime, closeTime] = openingHours.split(' - ');
+    const [openHour, openMinute] = openTime.split(' ')[0].split(':').map(Number);
+    const [closeHour, closeMinute] = closeTime.split(' ')[0].split(':').map(Number);
+    
+    // Convert to 24-hour format
+    let startHour = openHour;
+    let endHour = closeHour;
+    
+    if (openTime.includes('PM') && startHour !== 12) startHour += 12;
+    if (openTime.includes('AM') && startHour === 12) startHour = 0;
+    if (closeTime.includes('PM') && endHour !== 12) endHour += 12;
+    if (closeTime.includes('AM') && endHour === 12) endHour = 0;
+    
+    // Create slots from opening time until closing time
+    let currentTime = new Date();
+    currentTime.setFullYear(new Date(date).getFullYear());
+    currentTime.setMonth(new Date(date).getMonth());
+    currentTime.setDate(new Date(date).getDate());
+    currentTime.setHours(startHour, openMinute, 0, 0);
+    
+    const endTime = new Date(currentTime);
+    endTime.setHours(endHour, closeMinute, 0, 0);
+    
+    while (currentTime < endTime) {
+      const slotStartTime = currentTime.toLocaleTimeString('en-IE', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      });
+      
+      // Calculate slot end time based on service duration
+      const slotEndTime = new Date(currentTime.getTime() + (service.duration * 60000));
+      
+      // Check if this slot overlaps with any existing bookings
+      const isOverlapping = dateBookings.some(booking => {
+        if (booking.staffId !== staff.id) return false;
+        
+        // Create date objects for booking times
+        const [bookingHour, bookingMinute] = booking.startTime.split(':').map(Number);
+        const bookingStart = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate(), bookingHour, bookingMinute, 0, 0);
+        const bookingEnd = new Date(bookingStart.getTime() + (booking.duration * 60000));
+        
+        // Check for overlap
+        return (
+          (currentTime >= bookingStart && currentTime < bookingEnd) ||
+          (slotEndTime > bookingStart && slotEndTime <= bookingEnd) ||
+          (currentTime <= bookingStart && slotEndTime >= bookingEnd)
+        );
+      });
+      
+      // Check if the slot would extend past closing time
+      const wouldExtendPastClosing = slotEndTime > endTime;
+      
+      if (!isOverlapping && !wouldExtendPastClosing) {
+        availableSlots.push({
+          staffName: staff.name,
+          startTime: slotStartTime,
+          endTime: slotEndTime.toLocaleTimeString('en-IE', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+          })
+        });
+      }
+      
+      currentTime.setMinutes(currentTime.getMinutes() + 30);
+    }
+  });
+  
+  return availableSlots;
 }
