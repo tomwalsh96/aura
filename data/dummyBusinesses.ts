@@ -6,7 +6,7 @@ interface StaffMember {
   role: string;
   imageUrl: string;
   bio: string;
-  specialties: string[];
+  workingDays: string[]; // Array of days they work (e.g., ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
 }
 
 interface TimeSlot {
@@ -22,15 +22,15 @@ interface Booking {
   staffId: string;
   serviceId: string;
   date: string;
-  timeSlotId: string;
-  status: 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+  startTime: string;
+  duration: number; // in minutes
 }
 
 interface Service {
   id: string;
   name: string;
   price: number;
-  duration: string;
+  duration: number; // in minutes (30 or 60)
   description: string;
   staffIds: string[];
 }
@@ -38,7 +38,6 @@ interface Service {
 interface BusinessWithDetails extends Business {
   staff: StaffMember[];
   services: Service[];
-  timeSlots: TimeSlot[];
   bookings: Booking[];
   type: string;
   city: string;
@@ -57,79 +56,120 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     type: "salon",
     staff: [
       {
-        id: "staff1",
+        id: "550e8400-e29b-41d4-a716-446655440000",
         name: "John Smith",
         role: "Senior Stylist",
         imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
         bio: "10 years of experience in modern and classic cuts",
-        specialties: ["Fades", "Designs", "Beard Trimming"]
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       },
       {
-        id: "staff2",
+        id: "550e8400-e29b-41d4-a716-446655440001",
         name: "Mike Johnson",
         role: "Stylist",
         imageUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e",
         bio: "Specializing in kids cuts and modern styles",
-        specialties: ["Kids Cuts", "Modern Styles", "Designs"]
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Saturday"]
       }
     ],
     services: [
-      { 
-        id: "service1",
-        name: "Women's Cut", 
-        price: 65, 
-        duration: "45min",
-        description: "Professional women's haircut with wash and style",
-        staffIds: ["staff1", "staff2"]
-      },
-      { 
-        id: "service2",
-        name: "Color", 
-        price: 120, 
-        duration: "2h",
-        description: "Full hair colouring service with premium products",
-        staffIds: ["staff1"]
-      },
-      { 
-        id: "service3",
-        name: "Blowout", 
-        price: 45, 
-        duration: "30min",
-        description: "Professional blow dry and styling",
-        staffIds: ["staff2"]
-      }
-    ],
-    timeSlots: [
       {
-        id: "slot1",
-        startTime: "10:00",
-        endTime: "10:45",
-        isAvailable: true,
-        staffId: "staff1"
+        id: "550e8400-e29b-41d4-a716-446655440025",
+        name: "Classic Haircut",
+        price: 30,
+        duration: 30,
+        description: "Traditional haircut with modern techniques",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440000"]
       },
       {
-        id: "slot2",
-        startTime: "10:45",
-        endTime: "11:30",
-        isAvailable: true,
-        staffId: "staff2"
+        id: "550e8400-e29b-41d4-a716-446655440026",
+        name: "Beard Trim",
+        price: 20,
+        duration: 30,
+        description: "Professional beard shaping and grooming",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440001"]
       },
       {
-        id: "slot3",
-        startTime: "11:30",
-        endTime: "12:15",
-        isAvailable: false,
-        staffId: "staff1"
+        id: "550e8400-e29b-41d4-a716-446655440027",
+        name: "Kids Cut",
+        price: 25,
+        duration: 30,
+        description: "Fun and quick haircut for children",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440001"]
       }
     ],
     bookings: [
       {
-        id: "booking1",
-        staffId: "staff1",
-        serviceId: "service2",
-        date: "2024-03-30",
-        timeSlotId: "slot3",
-        status: "CONFIRMED"
+        id: "550e8400-e29b-41d4-a716-446655440002",
+        staffId: "550e8400-e29b-41d4-a716-446655440000",
+        serviceId: "550e8400-e29b-41d4-a716-446655440025",
+        date: "2025-04-02",
+        startTime: "10:00",
+        duration: 30
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440003",
+        staffId: "550e8400-e29b-41d4-a716-446655440001",
+        serviceId: "550e8400-e29b-41d4-a716-446655440026",
+        date: "2025-04-02",
+        startTime: "14:30",
+        duration: 30
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440004",
+        staffId: "550e8400-e29b-41d4-a716-446655440000",
+        serviceId: "550e8400-e29b-41d4-a716-446655440027",
+        date: "2025-04-03",
+        startTime: "11:00",
+        duration: 30
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440005",
+        staffId: "550e8400-e29b-41d4-a716-446655440001",
+        serviceId: "550e8400-e29b-41d4-a716-446655440025",
+        date: "2025-04-03",
+        startTime: "15:00",
+        duration: 30
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440006",
+        staffId: "550e8400-e29b-41d4-a716-446655440000",
+        serviceId: "550e8400-e29b-41d4-a716-446655440026",
+        date: "2025-04-02",
+        startTime: "16:30",
+        duration: 30
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440007",
+        staffId: "550e8400-e29b-41d4-a716-446655440001",
+        serviceId: "550e8400-e29b-41d4-a716-446655440027",
+        date: "2025-04-02",
+        startTime: "13:00",
+        duration: 30
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440008",
+        staffId: "550e8400-e29b-41d4-a716-446655440000",
+        serviceId: "550e8400-e29b-41d4-a716-446655440025",
+        date: "2025-04-03",
+        startTime: "09:30",
+        duration: 30
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440009",
+        staffId: "550e8400-e29b-41d4-a716-446655440001",
+        serviceId: "550e8400-e29b-41d4-a716-446655440026",
+        date: "2025-04-03",
+        startTime: "12:30",
+        duration: 30
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440010",
+        staffId: "550e8400-e29b-41d4-a716-446655440000",
+        serviceId: "550e8400-e29b-41d4-a716-446655440027",
+        date: "2025-04-03",
+        startTime: "16:00",
+        duration: 30
       }
     ],
     openingHours: {
@@ -152,81 +192,58 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     reviews: 203,
     imageUrl: "https://images.unsplash.com/photo-1560066984-138dadb4c035",
     type: "salon",
-    services: [
-      { 
-        id: "service1",
-        name: "Curly Cut", 
-        price: 75, 
-        duration: "1h",
-        description: "Specialized cut for curly hair types",
-        staffIds: ["staff1"]
-      },
-      { 
-        id: "service2",
-        name: "Perm", 
-        price: 150, 
-        duration: "2h30min",
-        description: "Professional perming service with aftercare",
-        staffIds: ["staff1"]
-      },
-      { 
-        id: "service3",
-        name: "Hair Therapy", 
-        price: 90, 
-        duration: "1h30min",
-        description: "Deep conditioning and treatment",
-        staffIds: ["staff2"]
-      }
-    ],
     staff: [
       {
-        id: "staff1",
+        id: "550e8400-e29b-41d4-a716-446655440002",
         name: "Sarah Wilson",
         role: "Senior Stylist",
         imageUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
         bio: "15 years of experience in curly hair and perming",
-        specialties: ["Curly Hair", "Perming", "Colour"]
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       },
       {
-        id: "staff2",
+        id: "550e8400-e29b-41d4-a716-446655440003",
         name: "Emma Davis",
         role: "Stylist",
         imageUrl: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80",
         bio: "Specialist in hair treatments and styling",
-        specialties: ["Hair Treatments", "Styling", "Colour"]
+        workingDays: ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
       }
     ],
-    timeSlots: [
+    services: [
       {
-        id: "slot1",
-        startTime: "10:00",
-        endTime: "11:00",
-        isAvailable: true,
-        staffId: "staff1"
+        id: "550e8400-e29b-41d4-a716-446655440028",
+        name: "Haircut & Style",
+        price: 45,
+        duration: 30,
+        description: "Professional haircut with wash and style",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440002"]
       },
       {
-        id: "slot2",
-        startTime: "11:00",
-        endTime: "12:00",
-        isAvailable: true,
-        staffId: "staff2"
+        id: "550e8400-e29b-41d4-a716-446655440029",
+        name: "Colour",
+        price: 80,
+        duration: 60,
+        description: "Full hair colouring service with premium products",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440003"]
       },
       {
-        id: "slot3",
-        startTime: "12:00",
-        endTime: "13:00",
-        isAvailable: false,
-        staffId: "staff1"
+        id: "550e8400-e29b-41d4-a716-446655440030",
+        name: "Treatment",
+        price: 60,
+        duration: 30,
+        description: "Deep conditioning and treatment",
+        staffIds: ["550e8400-e29b-41d4-a716-446655440002"]
       }
     ],
     bookings: [
       {
-        id: "booking1",
-        staffId: "staff1",
-        serviceId: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440004",
+        staffId: "550e8400-e29b-41d4-a716-446655440002",
+        serviceId: "550e8400-e29b-41d4-a716-446655440028",
         date: "2024-03-30",
-        timeSlotId: "slot3",
-        status: "CONFIRMED"
+        startTime: "14:00",
+        duration: 60
       }
     ],
     openingHours: {
@@ -241,7 +258,7 @@ export const dummyBusinesses: BusinessWithDetails[] = [
   },
   {
     id: 'b2c3d4e5-6f7g-8h9i-0j1k-l2m3n4o5p6q7',
-    name: "Urban Edge Barbers",
+    name: "Transform & Tress",
     description: "Where we turn 'I just want a trim' into 'Who's that model in the mirror?'",
     address: "28 South William Street",
     city: "Dublin",
@@ -251,79 +268,56 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     type: "barber",
     services: [
       { 
-        id: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440031",
         name: "Full Makeover", 
         price: 200, 
-        duration: "3h",
+        duration: 180,
         description: "Complete hair transformation service",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440004"]
       },
       { 
-        id: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440032",
         name: "Extensions", 
         price: 300, 
-        duration: "4h",
+        duration: 240,
         description: "Professional hair extension application",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440005"]
       },
       { 
-        id: "service3",
+        id: "550e8400-e29b-41d4-a716-446655440033",
         name: "Wedding Style", 
         price: 150, 
-        duration: "2h",
+        duration: 120,
         description: "Special occasion styling service",
-        staffIds: ["staff2"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440006"]
       }
     ],
     staff: [
       {
-        id: "staff1",
+        id: "550e8400-e29b-41d4-a716-446655440004",
         name: "Lisa Anderson",
         role: "Master Stylist",
         imageUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9",
         bio: "20 years of experience in transformations and extensions",
-        specialties: ["Hair Extensions", "Transformations", "Wedding Styling"]
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       },
       {
-        id: "staff2",
+        id: "550e8400-e29b-41d4-a716-446655440005",
         name: "Rachel Brown",
         role: "Senior Stylist",
         imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb",
         bio: "Specialist in wedding and special occasion styling",
-        specialties: ["Wedding Styling", "Special Occasions", "Colour"]
-      }
-    ],
-    timeSlots: [
-      {
-        id: "slot1",
-        startTime: "09:00",
-        endTime: "12:00",
-        isAvailable: true,
-        staffId: "staff1"
-      },
-      {
-        id: "slot2",
-        startTime: "12:00",
-        endTime: "15:00",
-        isAvailable: true,
-        staffId: "staff2"
-      },
-      {
-        id: "slot3",
-        startTime: "15:00",
-        endTime: "18:00",
-        isAvailable: false,
-        staffId: "staff1"
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       }
     ],
     bookings: [
       {
-        id: "booking1",
-        staffId: "staff1",
-        serviceId: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440007",
+        staffId: "550e8400-e29b-41d4-a716-446655440004",
+        serviceId: "550e8400-e29b-41d4-a716-446655440031",
         date: "2024-03-30",
-        timeSlotId: "slot3",
-        status: "CONFIRMED"
+        startTime: "14:00",
+        duration: 120
       }
     ],
     openingHours: {
@@ -348,79 +342,56 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     type: "salon",
     services: [
       { 
-        id: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440034",
         name: "Curly Cut", 
         price: 75, 
-        duration: "1h",
+        duration: 60,
         description: "Specialized cut for curly hair types",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440007"]
       },
       { 
-        id: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440035",
         name: "Perm", 
         price: 150, 
-        duration: "2h30min",
+        duration: 150,
         description: "Professional perming service with aftercare",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440008"]
       },
       { 
-        id: "service3",
+        id: "550e8400-e29b-41d4-a716-446655440036",
         name: "Hair Therapy", 
         price: 90, 
-        duration: "1h30min",
+        duration: 90,
         description: "Deep conditioning and treatment",
-        staffIds: ["staff2"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440007"]
       }
     ],
     staff: [
       {
-        id: "staff1",
+        id: "550e8400-e29b-41d4-a716-446655440007",
         name: "Emma Wilson",
         role: "Senior Stylist",
         imageUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
         bio: "15 years of experience in curly hair and perming",
-        specialties: ["Curly Hair", "Perming", "Colour"]
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       },
       {
-        id: "staff2",
+        id: "550e8400-e29b-41d4-a716-446655440008",
         name: "Sophie Davis",
         role: "Stylist",
         imageUrl: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80",
         bio: "Specialist in hair treatments and styling",
-        specialties: ["Hair Treatments", "Styling", "Colour"]
-      }
-    ],
-    timeSlots: [
-      {
-        id: "slot1",
-        startTime: "10:00",
-        endTime: "11:00",
-        isAvailable: true,
-        staffId: "staff1"
-      },
-      {
-        id: "slot2",
-        startTime: "11:00",
-        endTime: "12:00",
-        isAvailable: true,
-        staffId: "staff2"
-      },
-      {
-        id: "slot3",
-        startTime: "12:00",
-        endTime: "13:00",
-        isAvailable: false,
-        staffId: "staff1"
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Saturday"]
       }
     ],
     bookings: [
       {
-        id: "booking1",
-        staffId: "staff1",
-        serviceId: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440009",
+        staffId: "550e8400-e29b-41d4-a716-446655440007",
+        serviceId: "550e8400-e29b-41d4-a716-446655440034",
         date: "2024-03-30",
-        timeSlotId: "slot3",
-        status: "CONFIRMED"
+        startTime: "14:00",
+        duration: 60
       }
     ],
     openingHours: {
@@ -445,79 +416,56 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     type: "salon",
     services: [
       { 
-        id: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440037",
         name: "Full Makeover", 
         price: 200, 
-        duration: "3h",
+        duration: 180,
         description: "Complete hair transformation service",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440009"]
       },
       { 
-        id: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440038",
         name: "Extensions", 
         price: 300, 
-        duration: "4h",
+        duration: 240,
         description: "Professional hair extension application",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440010"]
       },
       { 
-        id: "service3",
+        id: "550e8400-e29b-41d4-a716-446655440039",
         name: "Wedding Style", 
         price: 150, 
-        duration: "2h",
+        duration: 120,
         description: "Special occasion styling service",
-        staffIds: ["staff2"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440011"]
       }
     ],
     staff: [
       {
-        id: "staff1",
+        id: "550e8400-e29b-41d4-a716-446655440009",
         name: "Lisa Anderson",
         role: "Master Stylist",
         imageUrl: "https://images.unsplash.com/photo-1517841905240-472988babdf9",
         bio: "20 years of experience in transformations and extensions",
-        specialties: ["Hair Extensions", "Transformations", "Wedding Styling"]
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       },
       {
-        id: "staff2",
+        id: "550e8400-e29b-41d4-a716-446655440010",
         name: "Rachel Brown",
         role: "Senior Stylist",
         imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb",
         bio: "Specialist in wedding and special occasion styling",
-        specialties: ["Wedding Styling", "Special Occasions", "Colour"]
-      }
-    ],
-    timeSlots: [
-      {
-        id: "slot1",
-        startTime: "09:00",
-        endTime: "12:00",
-        isAvailable: true,
-        staffId: "staff1"
-      },
-      {
-        id: "slot2",
-        startTime: "12:00",
-        endTime: "15:00",
-        isAvailable: true,
-        staffId: "staff2"
-      },
-      {
-        id: "slot3",
-        startTime: "15:00",
-        endTime: "18:00",
-        isAvailable: false,
-        staffId: "staff1"
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       }
     ],
     bookings: [
       {
-        id: "booking1",
-        staffId: "staff1",
-        serviceId: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440012",
+        staffId: "550e8400-e29b-41d4-a716-446655440009",
+        serviceId: "550e8400-e29b-41d4-a716-446655440037",
         date: "2024-03-30",
-        timeSlotId: "slot3",
-        status: "CONFIRMED"
+        startTime: "14:00",
+        duration: 120
       }
     ],
     openingHours: {
@@ -542,71 +490,48 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     type: "barber",
     services: [
       { 
-        id: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440040",
         name: "Smart Cut", 
         price: 40,
-        duration: "45min",
+        duration: 45,
         description: "Precision haircut with modern techniques",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440012"]
       },
       { 
-        id: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440041",
         name: "Beard Sculpting", 
         price: 30,
-        duration: "30min",
+        duration: 30,
         description: "Detailed beard shaping and grooming",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440013"]
       },
       { 
-        id: "service3",
+        id: "550e8400-e29b-41d4-a716-446655440042",
         name: "Head Shave", 
         price: 35, 
-        duration: "30min",
+        duration: 30,
         description: "Complete head shave with hot towel",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440014"]
       }
     ],
     staff: [
       {
-        id: "staff1",
+        id: "550e8400-e29b-41d4-a716-446655440012",
         name: "Michael Brown",
         role: "Master Barber",
         imageUrl: "https://images.unsplash.com/photo-1622288432450-277d0fef5ed6",
         bio: "15 years of experience in modern barbering",
-        specialties: ["Precision Cuts", "Beard Grooming", "Head Shaves"]
-      }
-    ],
-    timeSlots: [
-      {
-        id: "slot1",
-        startTime: "09:00",
-        endTime: "09:45",
-        isAvailable: true,
-        staffId: "staff1"
-      },
-      {
-        id: "slot2",
-        startTime: "09:45",
-        endTime: "10:15",
-        isAvailable: true,
-        staffId: "staff1"
-      },
-      {
-        id: "slot3",
-        startTime: "10:15",
-        endTime: "10:45",
-        isAvailable: false,
-        staffId: "staff1"
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       }
     ],
     bookings: [
       {
-        id: "booking1",
-        staffId: "staff1",
-        serviceId: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440015",
+        staffId: "550e8400-e29b-41d4-a716-446655440012",
+        serviceId: "550e8400-e29b-41d4-a716-446655440040",
         date: "2024-03-30",
-        timeSlotId: "slot3",
-        status: "CONFIRMED"
+        startTime: "14:00",
+        duration: 45
       }
     ],
     openingHours: {
@@ -631,79 +556,56 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     type: "barber",
     services: [
       { 
-        id: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440043",
         name: "The Mullet", 
         price: 45, 
-        duration: "45min",
+        duration: 45,
         description: "Classic mullet style with modern touch",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440015"]
       },
       { 
-        id: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440044",
         name: "The Billy Ray", 
         price: 50, 
-        duration: "1h",
+        duration: 60,
         description: "Signature mullet style with extra flair",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440016"]
       },
       { 
-        id: "service3",
+        id: "550e8400-e29b-41d4-a716-446655440045",
         name: "Modern Mullet", 
         price: 55, 
-        duration: "1h",
+        duration: 60,
         description: "Contemporary take on the classic mullet",
-        staffIds: ["staff2"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440017"]
       }
     ],
     staff: [
       {
-        id: "staff1",
+        id: "550e8400-e29b-41d4-a716-446655440015",
         name: "Billy Ray Cyrus",
         role: "Master Mullet Specialist",
         imageUrl: "https://images.unsplash.com/photo-1584316712724-f5d4b188fee2",
         bio: "30 years of mullet expertise and innovation",
-        specialties: ["Classic Mullets", "Modern Mullets", "Billy Ray Special"]
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       },
       {
-        id: "staff2",
+        id: "550e8400-e29b-41d4-a716-446655440016",
         name: "Miley Cyrus",
         role: "Senior Stylist",
         imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb",
         bio: "Bringing modern twists to classic styles",
-        specialties: ["Modern Mullets", "Styling", "Colour"]
-      }
-    ],
-    timeSlots: [
-      {
-        id: "slot1",
-        startTime: "10:00",
-        endTime: "10:45",
-        isAvailable: true,
-        staffId: "staff1"
-      },
-      {
-        id: "slot2",
-        startTime: "10:45",
-        endTime: "11:45",
-        isAvailable: true,
-        staffId: "staff2"
-      },
-      {
-        id: "slot3",
-        startTime: "11:45",
-        endTime: "12:45",
-        isAvailable: false,
-        staffId: "staff1"
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       }
     ],
     bookings: [
       {
-        id: "booking1",
-        staffId: "staff1",
-        serviceId: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440018",
+        staffId: "550e8400-e29b-41d4-a716-446655440015",
+        serviceId: "550e8400-e29b-41d4-a716-446655440043",
         date: "2024-03-30",
-        timeSlotId: "slot3",
-        status: "CONFIRMED"
+        startTime: "14:00",
+        duration: 60
       }
     ],
     openingHours: {
@@ -728,79 +630,56 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     type: "salon",
     services: [
       { 
-        id: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440046",
         name: "Rainbow Color", 
         price: 180, 
-        duration: "3h",
+        duration: 180,
         description: "Vibrant rainbow hair coloring service",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440018"]
       },
       { 
-        id: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440047",
         name: "Fantasy Cut", 
         price: 70, 
-        duration: "1h",
+        duration: 60,
         description: "Creative fantasy-inspired haircut",
-        staffIds: ["staff2"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440019"]
       },
       { 
-        id: "service3",
+        id: "550e8400-e29b-41d4-a716-446655440048",
         name: "Emerald Treatment", 
         price: 90, 
-        duration: "1h30min",
+        duration: 90,
         description: "Specialized green hair treatment",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440020"]
       }
     ],
     staff: [
       {
-        id: "staff1",
+        id: "550e8400-e29b-41d4-a716-446655440018",
         name: "Rainbow Bright",
         role: "Master Colourist",
         imageUrl: "https://images.unsplash.com/photo-1562322140-8baeececf3df",
         bio: "15 years of experience in fantasy hair colouring",
-        specialties: ["Rainbow Colours", "Fantasy Colours", "Hair Treatments"]
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       },
       {
-        id: "staff2",
+        id: "550e8400-e29b-41d4-a716-446655440019",
         name: "Pixie Dust",
         role: "Senior Stylist",
         imageUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb",
         bio: "Specialist in fantasy cuts and styling",
-        specialties: ["Fantasy Cuts", "Styling", "Colour"]
-      }
-    ],
-    timeSlots: [
-      {
-        id: "slot1",
-        startTime: "10:00",
-        endTime: "13:00",
-        isAvailable: true,
-        staffId: "staff1"
-      },
-      {
-        id: "slot2",
-        startTime: "13:00",
-        endTime: "14:00",
-        isAvailable: true,
-        staffId: "staff2"
-      },
-      {
-        id: "slot3",
-        startTime: "14:00",
-        endTime: "15:30",
-        isAvailable: false,
-        staffId: "staff1"
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       }
     ],
     bookings: [
       {
-        id: "booking1",
-        staffId: "staff1",
-        serviceId: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440021",
+        staffId: "550e8400-e29b-41d4-a716-446655440018",
+        serviceId: "550e8400-e29b-41d4-a716-446655440046",
         date: "2024-03-30",
-        timeSlotId: "slot3",
-        status: "CONFIRMED"
+        startTime: "14:00",
+        duration: 120
       }
     ],
     openingHours: {
@@ -825,79 +704,56 @@ export const dummyBusinesses: BusinessWithDetails[] = [
     type: "barber",
     services: [
       { 
-        id: "service1",
+        id: "550e8400-e29b-41d4-a716-446655440049",
         name: "Space Fade", 
         price: 40, 
-        duration: "45min",
+        duration: 45,
         description: "Cosmic-inspired fade haircut",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440021"]
       },
       { 
-        id: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440050",
         name: "Meteor Mohawk", 
         price: 50, 
-        duration: "1h",
+        duration: 60,
         description: "Space-themed mohawk style",
-        staffIds: ["staff1"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440022"]
       },
       { 
-        id: "service3",
+        id: "550e8400-e29b-41d4-a716-446655440051",
         name: "Buzz Cut", 
         price: 30, 
-        duration: "30min",
+        duration: 30,
         description: "Classic buzz cut with precision",
-        staffIds: ["staff2"]
+        staffIds: ["550e8400-e29b-41d4-a716-446655440023"]
       }
     ],
     staff: [
       {
-        id: "staff1",
+        id: "550e8400-e29b-41d4-a716-446655440021",
         name: "Neil Armstrong",
         role: "Space Barber",
         imageUrl: "https://images.unsplash.com/photo-1599351431202-1e0f0137899a",
         bio: "20 years of experience in cosmic hair styling",
-        specialties: ["Space Fades", "Meteor Mohawks", "Precision Cuts"]
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       },
       {
-        id: "staff2",
+        id: "550e8400-e29b-41d4-a716-446655440022",
         name: "Buzz Aldrin",
         role: "Senior Space Barber",
         imageUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e",
         bio: "Specialist in space-themed cuts and styles",
-        specialties: ["Buzz Cuts", "Space Styles", "Precision"]
-      }
-    ],
-    timeSlots: [
-      {
-        id: "slot1",
-        startTime: "09:00",
-        endTime: "09:45",
-        isAvailable: true,
-        staffId: "staff1"
-      },
-      {
-        id: "slot2",
-        startTime: "09:45",
-        endTime: "10:45",
-        isAvailable: true,
-        staffId: "staff2"
-      },
-      {
-        id: "slot3",
-        startTime: "10:45",
-        endTime: "11:15",
-        isAvailable: false,
-        staffId: "staff1"
+        workingDays: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
       }
     ],
     bookings: [
       {
-        id: "booking1",
-        staffId: "staff1",
-        serviceId: "service2",
+        id: "550e8400-e29b-41d4-a716-446655440024",
+        staffId: "550e8400-e29b-41d4-a716-446655440021",
+        serviceId: "550e8400-e29b-41d4-a716-446655440049",
         date: "2024-03-30",
-        timeSlotId: "slot3",
-        status: "CONFIRMED"
+        startTime: "14:00",
+        duration: 60
       }
     ],
     openingHours: {
@@ -922,18 +778,90 @@ export async function getBusinessData(businessId: string): Promise<BusinessWithD
   return dummyBusinesses.find(b => b.id === businessId) || null;
 }
 
-export async function getAvailableTimeSlots(businessId: string, date: string): Promise<TimeSlot[]> {
+export async function getAvailableTimeSlots(businessId: string, date: string): Promise<{ staffId: string, startTime: string, endTime: string }[]> {
   await new Promise(resolve => setTimeout(resolve, 500));
   const business = dummyBusinesses.find(b => b.id === businessId);
   if (!business) return [];
   
-  const bookedSlotIds = business.bookings
-    .filter(booking => booking.date === date && booking.status === "CONFIRMED")
-    .map(booking => booking.timeSlotId);
+  const availableSlots: { staffId: string, startTime: string, endTime: string }[] = [];
+  
+  // Get the day of the week from the date
+  const dayOfWeek = new Date(date).toLocaleDateString('en-IE', { weekday: 'long' });
+  
+  // Get all bookings for the date
+  const dateBookings = business.bookings.filter(booking => booking.date === date);
+  
+  // For each staff member
+  business.staff.forEach(staff => {
+    // Check if staff member works on this day
+    if (!staff.workingDays.includes(dayOfWeek)) return;
     
-  return business.timeSlots.filter(slot => 
-    !bookedSlotIds.includes(slot.id) && slot.isAvailable
-  );
+    // Get business opening hours for this day
+    const openingHours = business.openingHours[dayOfWeek];
+    if (!openingHours) return;
+    
+    // Parse opening hours
+    const [openTime] = openingHours.split(' - ');
+    const [time, period] = openTime.split(' ');
+    const [hours, minutes] = time.split(':').map(Number);
+    let startHour = hours;
+    
+    // Convert to 24-hour format
+    if (period === 'PM' && startHour !== 12) {
+      startHour += 12;
+    } else if (period === 'AM' && startHour === 12) {
+      startHour = 0;
+    }
+    
+    // Create 30-minute slots from opening time until closing time
+    let currentTime = new Date();
+    currentTime.setHours(startHour, minutes, 0, 0);
+    
+    // Default closing time (can be adjusted based on business hours)
+    const endTime = new Date();
+    endTime.setHours(18, 0, 0, 0); // 6 PM default
+    
+    while (currentTime < endTime) {
+      const slotStartTime = currentTime.toLocaleTimeString('en-IE', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      });
+      
+      // Check if this slot overlaps with any existing bookings
+      const isOverlapping = dateBookings.some(booking => {
+        if (booking.staffId !== staff.id) return false;
+        
+        // Create date objects for booking times
+        const [bookingHour, bookingMinute] = booking.startTime.split(':').map(Number);
+        const bookingStart = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate(), bookingHour, bookingMinute, 0, 0);
+        const bookingEnd = new Date(bookingStart.getTime() + (booking.duration * 60000));
+        
+        // Check for overlap
+        return (
+          (currentTime >= bookingStart && currentTime < bookingEnd) ||
+          (new Date(currentTime.getTime() + 30 * 60000) > bookingStart && new Date(currentTime.getTime() + 30 * 60000) <= bookingEnd) ||
+          (currentTime <= bookingStart && new Date(currentTime.getTime() + 30 * 60000) >= bookingEnd)
+        );
+      });
+      
+      if (!isOverlapping) {
+        availableSlots.push({
+          staffId: staff.id,
+          startTime: slotStartTime,
+          endTime: new Date(currentTime.getTime() + 30 * 60000).toLocaleTimeString('en-IE', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+          })
+        });
+      }
+      
+      currentTime.setMinutes(currentTime.getMinutes() + 30);
+    }
+  });
+  
+  return availableSlots;
 }
 
 export async function getStaffMembers(businessId: string): Promise<StaffMember[]> {
@@ -953,14 +881,20 @@ export async function createBooking(
   staffId: string,
   serviceId: string,
   date: string,
-  timeSlotId: string
+  startTime: string
 ): Promise<Booking> {
   await new Promise(resolve => setTimeout(resolve, 500));
   const business = dummyBusinesses.find(b => b.id === businessId);
   if (!business) throw new Error("Business not found");
   
-  const isSlotAvailable = business.timeSlots.some(slot => 
-    slot.id === timeSlotId && slot.isAvailable
+  const service = business.services.find(s => s.id === serviceId);
+  if (!service) throw new Error("Service not found");
+  
+  // Check if the slot is available
+  const availableSlots = await getAvailableTimeSlots(businessId, date);
+  const isSlotAvailable = availableSlots.some(slot => 
+    slot.staffId === staffId && 
+    slot.startTime === startTime
   );
   
   if (!isSlotAvailable) {
@@ -968,12 +902,12 @@ export async function createBooking(
   }
   
   const newBooking: Booking = {
-    id: `booking${Date.now()}`,
+    id: `550e8400-e29b-41d4-a716-446655440${business.bookings.length + 1}`,
     staffId,
     serviceId,
     date,
-    timeSlotId,
-    status: "CONFIRMED"
+    startTime,
+    duration: service.duration
   };
   
   business.bookings.push(newBooking);
@@ -985,9 +919,9 @@ export async function cancelBooking(businessId: string, bookingId: string): Prom
   const business = dummyBusinesses.find(b => b.id === businessId);
   if (!business) return false;
   
-  const booking = business.bookings.find(b => b.id === bookingId);
-  if (!booking) return false;
+  const bookingIndex = business.bookings.findIndex(b => b.id === bookingId);
+  if (bookingIndex === -1) return false;
   
-  booking.status = "CANCELLED";
+  business.bookings.splice(bookingIndex, 1);
   return true;
 }
