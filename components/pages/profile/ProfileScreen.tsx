@@ -10,11 +10,14 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '../../../hooks/useAuth';
 import { Ionicons } from '@expo/vector-icons';
 import { ErrorMessage } from '../../../components/ui/ErrorMessage';
 import { SettingsScreen } from './SettingsScreen';
+import { loadDummyDataToFirestore } from '../../../data/dummyBusinesses';
+import { db } from '../../../firebase-config';
 
 const AVATAR_OPTIONS = [
   require('../../../assets/avatars/uifaces-abstract-image-1.jpg'),
@@ -42,6 +45,7 @@ export default function ProfileScreen() {
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [selectedAvatar, setSelectedAvatar] = useState(0);
+  const [isLoadingData, setIsLoadingData] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -92,6 +96,26 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleLoadDummyData = async () => {
+    try {
+      setIsLoadingData(true);
+      setError(null);
+      
+      // Check if Firebase is properly initialized
+      if (!db) {
+        throw new Error('Firebase is not properly initialized. Please try again later.');
+      }
+      
+      await loadDummyDataToFirestore();
+      alert('Successfully loaded dummy data to Firestore');
+    } catch (error: any) {
+      console.error('Error loading dummy data:', error);
+      setError(error.message || 'Failed to load dummy data. Please try again.');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
   if (showSettings) {
     return <SettingsScreen onBack={handleBackFromSettings} />;
   }
@@ -126,6 +150,22 @@ export default function ProfileScreen() {
           <Ionicons name="settings-outline" size={24} color="#222222" />
           <Text style={styles.menuItemText}>Settings</Text>
           <Ionicons name="chevron-forward" size={24} color="#717171" />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.menuItem, isLoadingData && styles.menuItemDisabled]}
+          onPress={handleLoadDummyData}
+          disabled={isLoadingData}
+        >
+          <Ionicons name="cloud-upload-outline" size={24} color="#222222" />
+          <Text style={styles.menuItemText}>
+            {isLoadingData ? 'Loading Data...' : 'Load Dummy Data'}
+          </Text>
+          {isLoadingData ? (
+            <ActivityIndicator size="small" color="#222222" />
+          ) : (
+            <Ionicons name="chevron-forward" size={24} color="#717171" />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -446,5 +486,8 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 4,
+  },
+  menuItemDisabled: {
+    opacity: 0.5,
   },
 }); 

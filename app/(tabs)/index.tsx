@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, FlatList, StyleSheet, TextInput, TouchableOpacity, Text, ActivityIndicator, ScrollView } from 'react-native';
 import { BusinessListItem } from '../../components/pages/explore/BusinessListItem';
-import { dummyBusinesses } from '../../data/dummyBusinesses';
 import { Business } from '../../types/business';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebase-config';
 
 const categories: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap; color: string }[] = [
   { id: 'barbershop', label: 'Barbershop', icon: 'cut', color: '#A8D1FF' },
@@ -20,6 +21,35 @@ export default function ExploreScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+
+    // Set up real-time listener for businesses collection
+    const unsubscribe = onSnapshot(
+      collection(db, 'businesses'),
+      (snapshot) => {
+        const businessesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Business[];
+        setBusinesses(businessesData);
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error listening to businesses:', err);
+        setError('Failed to load businesses. Please try again.');
+        setLoading(false);
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
 
   const handleBusinessPress = (business: Business) => {
     router.push({
@@ -28,18 +58,44 @@ export default function ExploreScreen() {
     });
   };
 
-  const filteredBusinesses = dummyBusinesses.filter(business => {
-    return business.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           business.description.toLowerCase().includes(searchQuery.toLowerCase());
+  const filteredBusinesses = businesses.filter(business => {
+    const matchesSearch = business.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         business.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = !selectedCategory || business.type === selectedCategory;
+    return matchesSearch && matchesCategory;
   });
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    // Simulate a refresh
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
+    // No need to fetch manually as the listener will update automatically
+    setRefreshing(false);
   }, []);
+
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4A90E2" />
+        <Text style={styles.loadingText}>Loading businesses...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => {
+          setLoading(true);
+          setError(null);
+          // No need to fetch manually as the listener will update automatically
+          setRefreshing(false);
+        }}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -176,5 +232,41 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#666',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#FF3B30',
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 24,
+    backgroundColor: '#4A90E2',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 

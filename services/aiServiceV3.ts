@@ -5,6 +5,8 @@ import {
   createBooking,
   findAvailableSlotsForService
 } from '@/data/dummyBusinesses';
+import { db } from '../firebase-config';
+import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
 
 const tools: Tool[] = [{
   functionDeclarations: [
@@ -504,5 +506,80 @@ export class AIServiceV3 {
       console.error('Error in executeCreateBooking:', error);
       return null;
     }
+  }
+}
+
+export async function loadDummyDataToFirestore() {
+  try {
+    const businesses = await getAllBusinesses();
+    const batch = writeBatch(db);
+    
+    for (const business of businesses) {
+      // Create business document
+      const businessRef = doc(collection(db, 'businesses'), business.id);
+      
+      // Create business data without nested arrays
+      const businessData = {
+        id: business.id,
+        name: business.name,
+        description: business.description,
+        address: business.address,
+        city: business.city,
+        rating: business.rating,
+        reviews: business.reviews,
+        imageUrl: business.imageUrl,
+        type: business.type,
+        openingHours: business.openingHours
+      };
+      
+      // Set business document
+      batch.set(businessRef, businessData);
+      
+      // Create staff subcollection
+      for (const staff of business.staff) {
+        const staffRef = doc(collection(businessRef, 'staff'), staff.id);
+        batch.set(staffRef, {
+          id: staff.id,
+          name: staff.name,
+          role: staff.role,
+          imageUrl: staff.imageUrl,
+          bio: staff.bio,
+          workingDays: staff.workingDays
+        });
+      }
+      
+      // Create services subcollection
+      for (const service of business.services) {
+        const serviceRef = doc(collection(businessRef, 'services'), service.id);
+        batch.set(serviceRef, {
+          id: service.id,
+          name: service.name,
+          price: service.price,
+          duration: service.duration,
+          description: service.description,
+          staffIds: service.staffIds
+        });
+      }
+      
+      // Create bookings subcollection
+      for (const booking of business.bookings) {
+        const bookingRef = doc(collection(businessRef, 'bookings'), booking.id);
+        batch.set(bookingRef, {
+          id: booking.id,
+          staffId: booking.staffId,
+          serviceId: booking.serviceId,
+          date: booking.date,
+          startTime: booking.startTime,
+          duration: booking.duration
+        });
+      }
+    }
+    
+    // Commit all writes
+    await batch.commit();
+    return { success: true, message: 'Successfully loaded dummy data to Firestore' };
+  } catch (error) {
+    console.error('Error loading dummy data to Firestore:', error);
+    throw new Error('Failed to load dummy data to Firestore');
   }
 } 

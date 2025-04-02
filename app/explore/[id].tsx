@@ -1,35 +1,134 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { dummyBusinesses } from '../../data/dummyBusinesses';
+import { doc, onSnapshot, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase-config';
 import { Business } from '../../types/business';
+
+interface StaffMember {
+  id: string;
+  name: string;
+  role: string;
+  imageUrl: string;
+  bio: string;
+  workingDays: string[];
+}
+
+interface Service {
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
+  description: string;
+  staffIds: string[];
+}
 
 export default function BusinessDetailScreen() {
   const { id } = useLocalSearchParams();
-  const business = dummyBusinesses.find((b: Business) => b.id === id);
+  const router = useRouter();
+  const [business, setBusiness] = useState<Business | null>(null);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!business) {
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+
+    // Set up real-time listener for business document
+    const unsubscribeBusiness = onSnapshot(
+      doc(db, 'businesses', id as string),
+      (doc) => {
+        if (doc.exists()) {
+          setBusiness({ id: doc.id, ...doc.data() } as Business);
+        } else {
+          setError('Business not found');
+        }
+        setLoading(false);
+      },
+      (err) => {
+        console.error('Error listening to business:', err);
+        setError('Failed to load business details');
+        setLoading(false);
+      }
+    );
+
+    // Set up real-time listener for staff subcollection
+    const unsubscribeStaff = onSnapshot(
+      collection(db, 'businesses', id as string, 'staff'),
+      (snapshot) => {
+        const staffData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as StaffMember[];
+        setStaff(staffData);
+      },
+      (err) => {
+        console.error('Error listening to staff:', err);
+      }
+    );
+
+    // Set up real-time listener for services subcollection
+    const unsubscribeServices = onSnapshot(
+      collection(db, 'businesses', id as string, 'services'),
+      (snapshot) => {
+        const servicesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Service[];
+        setServices(servicesData);
+      },
+      (err) => {
+        console.error('Error listening to services:', err);
+      }
+    );
+
+    // Cleanup subscriptions on unmount
+    return () => {
+      unsubscribeBusiness();
+      unsubscribeStaff();
+      unsubscribeServices();
+    };
+  }, [id]);
+
+  const handleBookingPress = () => {
+    router.push({
+      pathname: '/booking/[id]',
+      params: { id }
+    });
+  };
+
+  if (loading) {
     return (
-      <View style={styles.container}>
-        <Text>Business not found</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4A90E2" />
+        <Text style={styles.loadingText}>Loading business details...</Text>
+      </View>
+    );
+  }
+
+  if (error || !business) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
+        <Text style={styles.errorText}>{error || 'Business not found'}</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} bounces={false}>
-      <View style={styles.imageContainer}>
-        <Image 
-          source={{ uri: business.imageUrl }} 
-          style={styles.image} 
-        />
-        <View style={styles.imageOverlay} />
-      </View>
+    <ScrollView style={styles.container}>
+      <Image
+        source={{ uri: business.imageUrl }}
+        style={styles.image}
+        resizeMode="cover"
+      />
       
-      <View style={styles.infoContainer}>
-        <View style={styles.headerSection}>
-          <Text style={styles.title}>{business.name}</Text>
+      <View style={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.name}>{business.name}</Text>
           <View style={styles.ratingContainer}>
             <Ionicons name="star" size={16} color="#FFD700" />
             <Text style={styles.rating}>{business.rating}</Text>
@@ -38,46 +137,47 @@ export default function BusinessDetailScreen() {
         </View>
 
         <Text style={styles.description}>{business.description}</Text>
+        
+        <View style={styles.infoSection}>
+          <Ionicons name="location-outline" size={20} color="#666" />
+          <Text style={styles.infoText}>{business.address}</Text>
+        </View>
+
+        <View style={styles.infoSection}>
+          <Ionicons name="time-outline" size={20} color="#666" />
+          <Text style={styles.infoText}>Open {business.openingHours[new Date().toLocaleDateString('en-IE', { weekday: 'long' })]}</Text>
+        </View>
 
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="cut" size={20} color="#222222" style={styles.sectionIcon} />
-            <Text style={styles.sectionTitle}>Services</Text>
-          </View>
-          {business.services.map((service: { name: string; price: number; duration: string }, index: number) => (
-            <View key={index} style={styles.serviceItem}>
-              <View style={styles.serviceInfo}>
-                <Text style={styles.serviceName}>{service.name}</Text>
-                <Text style={styles.serviceDuration}>{service.duration}</Text>
+          <Text style={styles.sectionTitle}>Our Team</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.staffContainer}>
+            {staff.map((member) => (
+              <View key={member.id} style={styles.staffCard}>
+                <Image source={{ uri: member.imageUrl }} style={styles.staffImage} />
+                <Text style={styles.staffName}>{member.name}</Text>
+                <Text style={styles.staffRole}>{member.role}</Text>
               </View>
-              <Text style={styles.servicePrice}>€{service.price}</Text>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Services</Text>
+          {services.map((service) => (
+            <View key={service.id} style={styles.serviceCard}>
+              <View style={styles.serviceHeader}>
+                <Text style={styles.serviceName}>{service.name}</Text>
+                <Text style={styles.servicePrice}>€{service.price}</Text>
+              </View>
+              <Text style={styles.serviceDuration}>{service.duration} minutes</Text>
+              <Text style={styles.serviceDescription}>{service.description}</Text>
             </View>
           ))}
         </View>
 
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="time" size={20} color="#222222" style={styles.sectionIcon} />
-            <Text style={styles.sectionTitle}>Opening Hours</Text>
-          </View>
-          {Object.entries(business.openingHours).map(([day, hours]) => {
-            const hoursString = hours as string;
-            return (
-              <View key={day} style={styles.hoursRow}>
-                <Text style={styles.day}>{day}</Text>
-                <Text style={styles.hours}>{hoursString}</Text>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="location" size={20} color="#222222" style={styles.sectionIcon} />
-            <Text style={styles.sectionTitle}>Location</Text>
-          </View>
-          <Text style={styles.address}>{business.address}</Text>
-        </View>
+        <TouchableOpacity style={styles.bookButton} onPress={handleBookingPress}>
+          <Text style={styles.bookButtonText}>Book Appointment</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -86,31 +186,21 @@ export default function BusinessDetailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-  },
-  imageContainer: {
-    position: 'relative',
-    height: 250,
+    backgroundColor: '#f5f5f5',
   },
   image: {
     width: '100%',
-    height: '100%',
+    height: 200,
   },
-  imageOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  content: {
+    padding: 16,
   },
-  infoContainer: {
-    padding: 20,
-    backgroundColor: '#fff',
+  header: {
+    marginBottom: 16,
   },
-  headerSection: {
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#222222',
+  name: {
+    fontSize: 24,
+    fontWeight: 'bold',
     marginBottom: 8,
   },
   ratingContainer: {
@@ -121,82 +211,132 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 4,
-    color: '#222222',
   },
   reviews: {
     fontSize: 14,
-    color: '#717171',
+    color: '#666',
     marginLeft: 4,
   },
   description: {
     fontSize: 16,
-    color: '#222222',
-    marginBottom: 24,
+    color: '#333',
+    marginBottom: 16,
     lineHeight: 24,
   },
-  section: {
-    marginBottom: 24,
-    backgroundColor: '#f8f8f8',
-    borderRadius: 12,
-    padding: 16,
-  },
-  sectionHeader: {
+  infoSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
-  sectionIcon: {
-    marginRight: 8,
+  infoText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  section: {
+    marginTop: 24,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#222222',
+    marginBottom: 16,
   },
-  serviceItem: {
-    flexDirection: 'row',
+  staffContainer: {
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+  },
+  staffCard: {
+    width: 120,
+    marginRight: 16,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
   },
-  serviceInfo: {
-    flex: 1,
+  staffImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 8,
+  },
+  staffName: {
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  staffRole: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+  serviceCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  serviceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   serviceName: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#222222',
-    marginBottom: 4,
-  },
-  serviceDuration: {
-    fontSize: 14,
-    color: '#717171',
+    fontWeight: '600',
   },
   servicePrice: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#222222',
+    color: '#4A90E2',
   },
-  hoursRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+  serviceDuration: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
   },
-  day: {
+  serviceDescription: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  bookButton: {
+    backgroundColor: '#4A90E2',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 32,
+  },
+  bookButtonText: {
+    color: '#fff',
     fontSize: 16,
-    color: '#222222',
+    fontWeight: '600',
   },
-  hours: {
-    fontSize: 16,
-    color: '#717171',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
   },
-  address: {
+  loadingText: {
+    marginTop: 16,
     fontSize: 16,
-    color: '#717171',
-    lineHeight: 24,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#FF3B30',
+    textAlign: 'center',
   },
 }); 
