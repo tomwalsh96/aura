@@ -16,6 +16,7 @@ import {
   setDoc
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import * as FileSystem from 'expo-file-system';
 
 interface FirestoreBooking {
   id: string;
@@ -158,6 +159,7 @@ export class AIService {
     7. If user selects a time, ALWAYS call create_booking function immediately
     8. If user says "okay" or "yes" after selecting a time, ALWAYS call create_booking function
     9. NEVER EVER make assumptions about booking status without function confirmation
+    10. Never use markdown in your responses for styling
 
     CURRENT DATE AND TIME:
     ${new Date().toLocaleString('en-IE', { 
@@ -203,20 +205,20 @@ export class AIService {
     - Avoid saying you are going to do something, just do it directly
     
     Initial greeting and booking process explanation:
-    "Hi! 👋 I'm Aura, your friendly booking assistant.
+    "Hi! I'm Aura, your friendly booking assistant.
 
-    🎯 **Search by:**
-    • City (Dublin, Cork, Galway...)
-    • Service (Haircuts, wellness treatments...)
-    • Business name
+    Search by:
+    - City (Dublin, Cork, Galway...)
+    - Service (Haircuts, wellness treatments...)
+    - Business name
 
-    ✨ **Quick Guide:**
-    1. **Find Business** - Search by city/service/name
-    2. **Pick Service** - View staff, prices & duration
-    3. **Book Date** - Choose date (e.g., "Thursday" or "April 25th")
-    4. **Select Time** - Pick slot & complete booking
+    Quick Guide:
+    1. Find Business - Search by city/service/name
+    2. Pick Service - View staff, prices & duration
+    3. Book Date - Choose date (e.g., "Thursday" or "April 25th")
+    4. Select Time - Pick slot & complete booking
 
-    What would you like to search for? 😊"
+    What would you like to search for?"
 
     CRITICAL RULES:
     1. SEARCH REFINEMENT:
@@ -232,23 +234,23 @@ export class AIService {
        - ALWAYS use find_available_slots to check time availability
        - NEVER suggest or list times without checking availability first
        - ALWAYS use exact names from the business data:
-         • businessName from the business object
-         • serviceName from the service object
-         • staffName from the staff object
+         - businessName from the business object
+         - serviceName from the service object
+         - staffName from the staff object
        - NEVER make up or guess names
        - NEVER claim a booking was created without:
-         • First calling create_booking function
-         • Waiting for a successful response
-         • Only then confirming the booking to the user
+         - First calling create_booking function
+         - Waiting for a successful response
+         - Only then confirming the booking to the user
 
     3. LANGUAGE RULES:
        - NEVER use passive phrases like:
-         • "let me"
-         • "I'll"
-         • "I will"
-         • "let's"
-         • "we can"
-         • "we should"
+         - "let me"
+         - "I'll"
+         - "I will"
+         - "let's"
+         - "we can"
+         - "we should"
        - ALWAYS use direct, active language
        - ALWAYS ask for search refinement first
        - NEVER say "I've created your booking" or similar without first calling create_booking
@@ -269,8 +271,8 @@ export class AIService {
        - Present only businesses matching the search criteria
        - Group businesses by city
        - For each business, show:
-         • Name and rating
-         • Available services with prices
+         - Name and rating
+         - Available services with prices
        - Use bullet points for better readability
        - Ask the user what they'd like to do next
 
@@ -294,14 +296,14 @@ export class AIService {
     Assistant: [CALLS list_businesses]
     "Here are the available wellness businesses in Dublin:
 
-    • Serenity Wellness Centre (4.9★)
-      - Therapeutic Treatment: €90
-      - Sports Therapy: €85
-      - Aromatherapy Treatment: €95
-      Staff: 
-      • Dr. Sarah O'Connor - Senior Practitioner
-      • Michael Murphy - Specialist
-      • Emma Walsh - Aromatherapist
+    Serenity Wellness Centre (4.9★)
+    - Therapeutic Treatment: €90
+    - Sports Therapy: €85
+    - Aromatherapy Treatment: €95
+    Staff: 
+    - Dr. Sarah O'Connor - Senior Practitioner
+    - Michael Murphy - Specialist
+    - Emma Walsh - Aromatherapist
 
     What type of treatment would you like to book?"
 
@@ -310,10 +312,10 @@ export class AIService {
     "Here are the available slots for Therapeutic Treatment at Serenity Wellness Centre on Thursday:
 
     Dr. Sarah O'Connor:
-    • 09:00 - 10:00
-    • 10:30 - 11:30
-    • 14:00 - 15:00
-    • 15:30 - 16:30
+    - 09:00 - 10:00
+    - 10:30 - 11:30
+    - 14:00 - 15:00
+    - 15:30 - 16:30
 
     Please select a time slot to proceed with your booking."
 
@@ -327,11 +329,11 @@ export class AIService {
     "Here are the available slots for Haircut at Shear Madness on Saturday, April 13th:
 
     Mike Johnson:
-    • 10:00 - 10:30
-    • 10:30 - 11:00
-    • 11:00 - 11:30
-    • 14:00 - 14:30
-    • 14:30 - 15:00
+    - 10:00 - 10:30
+    - 10:30 - 11:00
+    - 11:00 - 11:30
+    - 14:00 - 14:30
+    - 14:30 - 15:00
 
     Please select a time slot to proceed with your booking."
     `;
@@ -373,14 +375,36 @@ export class AIService {
 
   /**
    * Generates a response from the AI model using chat history
-   * @param message - The user's input message
+   * @param message - The user's input message or audio file URI
+   * @param isAudio - Whether the input is an audio file
    * @returns The AI's response
    */
-  async generateResponse(message: string): Promise<string> {
+  async generateResponse(message: string, isAudio: boolean = false): Promise<string> {
     try {
-      console.log('Starting generateResponse with message:', message);
+      console.log('Starting generateResponse with:', { message, isAudio });
       
-      this.addMessage('user', message);
+      let userInput: any;
+      
+      if (isAudio) {
+        // Read the audio file
+        const audioBase64 = await FileSystem.readAsStringAsync(message, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        // Create a multimodal part with the audio
+        userInput = [{
+          text: "[Audio Message]"
+        }, {
+          inlineData: {
+            mimeType: "audio/m4a",
+            data: audioBase64
+          }
+        }];
+      } else {
+        userInput = message;
+      }
+
+      this.addMessage('user', isAudio ? '[Audio Message]' : message);
       console.log('Added user message to history');
 
       this.chat = this.model.startChat({
@@ -391,7 +415,7 @@ export class AIService {
       });
       console.log('Started new chat with history');
 
-      let result = await this.chat.sendMessage(message);
+      let result = await this.chat.sendMessage(userInput);
       console.log('Received initial response from model');
       
       let response = await result.response;
@@ -438,10 +462,10 @@ export class AIService {
         if (functionResponseData) {
           switch (name) {
             case 'list_businesses':
-              const businesses = functionResponseData as any[];
+          const businesses = functionResponseData as any[];
               if (businesses.length > 0) {
-                formattedResponse = 'Here are the available businesses:\n\n';
-                businesses.forEach(business => {
+            formattedResponse = 'Here are the available businesses:\n\n';
+            businesses.forEach(business => {
                   formattedResponse += `• ${business.businessName} (${business.businessRating}★)\n`;
                   business.services.forEach((service: any) => {
                     formattedResponse += `  - ${service.serviceName}: €${service.servicePrice}\n`;
@@ -453,7 +477,7 @@ export class AIService {
                   formattedResponse += '\n';
                 });
                 formattedResponse += 'What would you like to book?';
-              } else {
+            } else {
                 formattedResponse = 'No businesses found matching your criteria. Please try a different search.';
               }
               break;
@@ -478,7 +502,7 @@ export class AIService {
                   formattedResponse += '\n';
                 });
                 formattedResponse += 'Please select a time slot to proceed with your booking.';
-              } else {
+            } else {
                 formattedResponse = `No available slots found for ${args.serviceName} at ${args.businessName} on ${args.date}. Would you like to try a different date?`;
               }
               break;
@@ -486,7 +510,7 @@ export class AIService {
             case 'create_booking':
               if (functionResponseData && functionResponseData.id) {
                 formattedResponse = `Successfully created your booking for ${args.serviceName} at ${args.businessName} on ${args.date} at ${args.startTime}. Would you like to book anything else?`;
-              } else {
+          } else {
                 formattedResponse = 'Sorry, I was unable to create your booking. Please try again or select a different time slot.';
               }
               break;
@@ -521,7 +545,7 @@ export class AIService {
         if (!finalResponse || finalResponse.trim() === '') {
           console.log('Using formatted response as final response');
           this.addMessage('model', formattedResponse);
-          return formattedResponse;
+        return formattedResponse;
         }
 
         // Only check for booking success phrases if there was no function call
@@ -549,7 +573,7 @@ export class AIService {
             this.addMessage('model', 'I need to properly create your booking using the create_booking function. Please try again.');
             
             // Retry the response generation
-            return this.generateResponse(message);
+            return this.generateResponse(message, isAudio);
           }
         }
 
@@ -595,7 +619,7 @@ export class AIService {
           this.addMessage('model', 'I need to properly create your booking using the create_booking function. Please try again.');
           
           // Retry the response generation
-          return this.generateResponse(message);
+          return this.generateResponse(message, isAudio);
         }
       }
 
@@ -727,11 +751,11 @@ export class AIService {
         console.log('No business found with name:', businessName);
         return [];
       }
-      
+
       const businessDoc = businessSnapshot.docs[0];
       const business = businessDoc.data() as FirestoreBusiness;
       console.log('Found business:', { 
-        name: business.name, 
+        name: business.name,
         openingHours: business.openingHours 
       });
       
@@ -742,12 +766,12 @@ export class AIService {
       
       if (serviceSnapshot.empty) {
         console.log('No service found with name:', serviceName);
-        return [];
+      return [];
       }
       
       const service = serviceSnapshot.docs[0].data() as FirestoreService;
       console.log('Found service:', { 
-        name: service.name, 
+        name: service.name,
         duration: service.duration,
         staffIds: service.staffIds 
       });
