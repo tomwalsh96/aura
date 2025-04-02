@@ -50,15 +50,18 @@ export default function TabLayout() {
           name="my-bookings"
           options={{
             title: 'My Bookings',
-            tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={24} color={color} />,
-            headerShown: false,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="calendar-outline" size={size} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="profile"
           options={{
             title: 'Profile',
-            tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} />,
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="person-outline" size={size} color={color} />
+            ),
           }}
         />
       </Tabs>

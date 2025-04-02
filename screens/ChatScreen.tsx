@@ -4,15 +4,12 @@ import { ChatInput } from '@/components/ChatInput';
 import { ChatMessages } from '@/components/ChatMessages';
 import { AIService } from '@/services/aiService';
 import { ChatMessage } from '@/types/chat';
-import { SelectedBusiness } from '@/components/SelectedBusiness';
-import { Business } from '@/types/business';
 
 export const ChatScreen: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [aiService] = useState(() => new AIService(process.env.EXPO_PUBLIC_GOOGLE_AI_API_KEY || ''));
-  const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
 
   useEffect(() => {
     // Add initial greeting
@@ -50,12 +47,6 @@ export const ChatScreen: React.FC = () => {
       };
 
       setMessages(prev => [...prev, modelMessage]);
-
-      // Check if a business was selected
-      const selectionState = aiService.getSelectionState();
-      if (selectionState.selectedBusiness && selectionState.selectionConfirmed) {
-        setSelectedBusiness(selectionState.selectedBusiness);
-      }
     } catch (error) {
       console.error('Error generating response:', error);
       const errorMessage: ChatMessage = {
@@ -70,23 +61,12 @@ export const ChatScreen: React.FC = () => {
     }
   };
 
-  const handleResetSelection = () => {
-    setSelectedBusiness(null);
-    aiService.resetSelection();
-  };
-
   return (
     <KeyboardAvoidingView 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <View style={styles.content}>
-        {selectedBusiness && (
-          <SelectedBusiness 
-            business={selectedBusiness}
-            onReset={handleResetSelection}
-          />
-        )}
         <ChatMessages messages={messages} isLoading={isLoading} />
         <ChatInput
           value={inputMessage}

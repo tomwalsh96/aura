@@ -10,6 +10,8 @@ export interface Coordinates {
   longitude: number;
 }
 
+// This was a failed attempt at getting the user's location to determine the closest business / city
+// I ran into numerious issues with this, one being the model being able to get the data, but refusing to use it (likley a safety guardrail)
 export class LocationService {
   private static instance: LocationService;
 

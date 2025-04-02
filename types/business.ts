@@ -11,12 +11,6 @@ export interface Business {
   openingHours: Record<string, string>;
 }
 
-export interface BusinessSelectionState {
-  selectedBusiness: Business | null;
-  selectionConfirmed: boolean;
-  selectionTimestamp: number | null;
-}
-
 export interface BusinessWithDetails extends Business {
   staff: StaffMember[];
   services: Service[];

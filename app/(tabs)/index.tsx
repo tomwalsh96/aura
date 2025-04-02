@@ -9,10 +9,7 @@ import { db } from '../../firebase-config';
 
 const categories: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap; color: string }[] = [
   { id: 'barbershop', label: 'Barbershop', icon: 'cut', color: '#A8D1FF' },
-  { id: 'salon', label: 'Hair Salon', icon: 'water', color: '#FFB6D9' },
-  { id: 'spa', label: 'Spa', icon: 'sparkles', color: '#FFD6A5' },
-  { id: 'nails', label: 'Nails', icon: 'hand-left', color: '#FFA5A5' },
-  { id: 'massage', label: 'Massage', icon: 'fitness', color: '#A5FFA5' },
+  { id: 'salon', label: 'Salon', icon: 'water', color: '#FFB6D9' },
   { id: 'wellness', label: 'Wellness', icon: 'leaf', color: '#A5FFD6' }
 ];
 

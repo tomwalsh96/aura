@@ -13,8 +13,10 @@ export const BusinessListItem: React.FC<BusinessListItemProps> = ({ business, on
     switch (type) {
       case 'barber':
         return '#A8D1FF';
-      case 'hairstylist':
+      case 'salon':
         return '#FFB6D9';
+      case 'wellness':
+        return '#A5FFD6';
       default:
         return '#E5E5EA';
     }
