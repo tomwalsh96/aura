@@ -14,7 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import Markdown from "react-native-markdown-display";
 import { ErrorMessage } from "@/components/ui/ErrorMessage";
-import { AIServiceV3 } from "@/services/aiServiceV3";
+import { AIService } from "@/services/aiService";
 import { ChatMessage } from "@/types/chat";
 import { LocationService } from "@/services/locationService";
 
@@ -28,18 +28,18 @@ interface Message {
   };
 }
 
-export default function ChatV3Screen() {
+export default function ChatScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [lastMessageTime, setLastMessageTime] = useState<number>(0);
   const flatListRef = useRef<FlatList>(null);
-  const aiServiceRef = useRef<AIServiceV3 | null>(null);
+  const aiServiceRef = useRef<AIService | null>(null);
   const locationService = useRef(LocationService.getInstance()).current;
 
   useEffect(() => {
     // Initialize AI service with your API key
-    aiServiceRef.current = new AIServiceV3(process.env.GOOGLE_AI_KEY || "");
+    aiServiceRef.current = new AIService(process.env.GOOGLE_AI_KEY || "");
   }, []);
 
   const handleSend = async () => {
@@ -143,7 +143,7 @@ export default function ChatV3Screen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Chat V3</Text>
+        <Text style={styles.headerTitle}>Chat</Text>
         <TouchableOpacity
           style={styles.refreshButton}
           onPress={handleRefresh}

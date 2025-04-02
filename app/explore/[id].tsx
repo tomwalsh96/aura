@@ -145,7 +145,19 @@ export default function BusinessDetailScreen() {
 
         <View style={styles.infoSection}>
           <Ionicons name="time-outline" size={20} color="#666" />
-          <Text style={styles.infoText}>Open {business.openingHours[new Date().toLocaleDateString('en-IE', { weekday: 'long' })]}</Text>
+          <View style={styles.openingHoursContainer}>
+            {Object.entries(business.openingHours)
+              .sort(([dayA], [dayB]) => {
+                const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                return days.indexOf(dayA) - days.indexOf(dayB);
+              })
+              .map(([day, hours]) => (
+                <View key={day} style={styles.openingHoursRow}>
+                  <Text style={[styles.infoText, styles.dayText]}>{day}:</Text>
+                  <Text style={styles.infoText}>{hours}</Text>
+                </View>
+            ))}
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -338,5 +350,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FF3B30',
     textAlign: 'center',
+  },
+  openingHoursContainer: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  openingHoursRow: {
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  dayText: {
+    width: 100,
+    fontWeight: '500',
   },
 }); 

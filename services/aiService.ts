@@ -137,7 +137,7 @@ const tools: Tool[] = [{
 /**
  * Service for handling AI-related operations
  */
-export class AIServiceV3 {
+export class AIService {
   private model: any;
   private chat: any;
   private history: ChatMessage[] = [];
