@@ -18,6 +18,7 @@ interface Booking {
 export default function MyBookingsScreen() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showPastBookings, setShowPastBookings] = useState(false);
   const router = useRouter();
 
@@ -27,29 +28,69 @@ export default function MyBookingsScreen() {
       return;
     }
 
-    // Get today's date at midnight for comparison
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    setLoading(true);
+    setError(null);
+
+    // Get current date and time for comparison
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentTime = now.toLocaleTimeString('en-IE', { 
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false 
+    });
 
     // Set up real-time listener for user's bookings
     const bookingsRef = collection(db, 'users', auth.currentUser.uid, 'bookings');
     const bookingsQuery = query(
       bookingsRef,
-      where('date', showPastBookings ? '<' : '>=', today.toISOString().split('T')[0]),
       orderBy('date', showPastBookings ? 'desc' : 'asc')
     );
 
-    const unsubscribe = onSnapshot(bookingsQuery, (snapshot) => {
-      const bookingsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Booking[];
+    const unsubscribe = onSnapshot(
+      bookingsQuery, 
+      (snapshot) => {
+        try {
+          const bookingsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as Booking[];
 
-      setBookings(bookingsData);
-      setLoading(false);
-    });
+          // Filter bookings based on date and time
+          const filteredBookings = bookingsData.filter(booking => {
+            // If dates are different, compare dates
+            if (booking.date !== today) {
+              return showPastBookings 
+                ? booking.date < today 
+                : booking.date > today;
+            }
+            // If same date, compare times
+            return showPastBookings 
+              ? booking.startTime < currentTime 
+              : booking.startTime >= currentTime;
+          });
 
-    return () => unsubscribe();
+          setBookings(filteredBookings);
+          setError(null);
+        } catch (err) {
+          console.error('Error processing bookings data:', err);
+          setError('Error loading bookings. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+      },
+      (err) => {
+        console.error('Error in bookings stream:', err);
+        setError('Error connecting to bookings. Please check your connection.');
+        setLoading(false);
+      }
+    );
+
+    // Cleanup subscription on unmount
+    return () => {
+      console.log('Unsubscribing from bookings stream');
+      unsubscribe();
+    };
   }, [showPastBookings]);
 
   const renderBooking = ({ item }: { item: Booking }) => (
@@ -135,6 +176,17 @@ export default function MyBookingsScreen() {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#4A90E2" />
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => setShowPastBookings(showPastBookings)}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -294,6 +346,31 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   bookNowButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    gap: 12,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  retryButton: {
+    backgroundColor: '#4A90E2',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  retryButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',

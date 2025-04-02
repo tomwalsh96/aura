@@ -9,6 +9,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Markdown from "react-native-markdown-display";
@@ -233,6 +234,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     marginBottom: 16,
+    flexShrink: 1,
   },
   userMessage: {
     alignSelf: "flex-end",
@@ -249,22 +251,22 @@ const styles = StyleSheet.create({
   messageText: {
     fontSize: 16,
     lineHeight: 22,
+    flexShrink: 1,
   },
   userMessageText: {
     color: "#FFFFFF",
   },
   errorText: {
-    fontSize: 16,
     color: "#FF3B30",
+    fontSize: 16,
+    flexShrink: 1,
   },
   messageLoader: {
-    marginTop: 4,
+    marginVertical: 8,
   },
   inputContainer: {
     flexDirection: "row",
-    padding: 8,
-    paddingLeft: 16,
-    paddingBottom: 12,
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: "#E5E5EA",
     alignItems: "flex-end",
@@ -272,33 +274,34 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     backgroundColor: "#F0F0F0",
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: 20,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     marginRight: 8,
-    maxHeight: 100,
     fontSize: 16,
+    maxHeight: 100,
+    minHeight: 40,
   },
   sendButton: {
-    padding: 8,
-    paddingTop: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#F0F0F0",
     justifyContent: "center",
     alignItems: "center",
-    height: 40,
   },
   sendButtonDisabled: {
     opacity: 0.5,
   },
   boldText: {
-    fontWeight: "700",
+    fontWeight: "bold",
   },
   italicText: {
     fontStyle: "italic",
   },
   bulletList: {
-    marginLeft: 8,
-    marginTop: 4,
-    marginBottom: 4,
+    marginLeft: 16,
+    flexShrink: 1,
   },
   bulletListIcon: {
     marginRight: 8,
@@ -308,12 +311,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#F5F5F5",
     padding: 4,
     borderRadius: 4,
+    flexShrink: 1,
   },
   codeInline: {
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     backgroundColor: "#F5F5F5",
     padding: 2,
     borderRadius: 4,
+    flexShrink: 1,
   },
   codeBlock: {
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
@@ -321,5 +326,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 4,
     marginVertical: 8,
+    flexShrink: 1,
   },
 }); 

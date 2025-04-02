@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, SchemaType, Tool } from '@google/generative-ai';
 import { ChatMessage } from '@/types/chat';
 import { db } from '../firebase-config';
+import 'react-native-get-random-values';
+import { v4 as uuidv4 } from 'uuid';
 import { 
   collection, 
   query, 
@@ -10,8 +12,10 @@ import {
   getDoc, 
   Timestamp, 
   addDoc,
-  DocumentData 
+  DocumentData,
+  setDoc
 } from 'firebase/firestore';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
 interface FirestoreBooking {
   id: string;
@@ -103,17 +107,17 @@ const tools: Tool[] = [{
       parameters: {
         type: SchemaType.OBJECT,
         properties: {
-          businessId: {
+          businessName: {
             type: SchemaType.STRING,
-            description: "The ID of the business to book at."
+            description: "The name of the business to book at."
           },
-          staffId: {
+          staffName: {
             type: SchemaType.STRING,
-            description: "The ID of the staff member to book with."
+            description: "The name of the staff member to book with."
           },
-          serviceId: {
+          serviceName: {
             type: SchemaType.STRING,
-            description: "The ID of the service to book."
+            description: "The name of the service to book."
           },
           date: {
             type: SchemaType.STRING,
@@ -124,7 +128,7 @@ const tools: Tool[] = [{
             description: "The start time of the booking (HH:mm format)."
           }
         },
-        required: ["businessId", "staffId", "serviceId", "date", "startTime"]
+        required: ["businessName", "staffName", "serviceName", "date", "startTime"]
       }
     },
   ]
@@ -144,6 +148,17 @@ export class AIServiceV3 {
     this.systemInstruction = `
     You are a focused booking assistant with one clear goal: help users book appointments efficiently. Your responses should be direct and action-oriented, but also friendly and engaging.
 
+    CRITICAL BOOKING RULES:
+    1. NEVER EVER say "booking" or "booked" without calling create_booking function
+    2. NEVER EVER say "confirmed" or "confirmation" without calling create_booking function
+    3. NEVER EVER say "appointment" or "scheduled" without calling create_booking function
+    4. NEVER EVER say "I will book" or "I'll book" - just call the function directly
+    5. NEVER EVER say "Okay, booking..." or similar phrases without calling the function
+    6. NEVER EVER respond with a success message without calling create_booking function
+    7. If user selects a time, ALWAYS call create_booking function immediately
+    8. If user says "okay" or "yes" after selecting a time, ALWAYS call create_booking function
+    9. NEVER EVER make assumptions about booking status without function confirmation
+
     CURRENT DATE AND TIME:
     ${new Date().toLocaleString('en-IE', { 
       timeZone: 'Europe/Dublin',
@@ -156,14 +171,36 @@ export class AIServiceV3 {
       hour12: false
     })}
 
+    CRITICAL FUNCTION CALL REQUIREMENTS:
+    1. ALWAYS use list_businesses function when:
+       - User mentions a city (e.g., "Dublin", "Cork")
+       - User mentions a service type (e.g., "haircut", "massage")
+       - User asks to see available businesses
+       - BEFORE mentioning any business information
+
+    2. ALWAYS use find_available_slots function when:
+       - User mentions a day of the week (e.g., "Saturday", "Thursday")
+       - User mentions a specific date
+       - User asks about availability
+       - User wants to book a time slot
+       - BEFORE suggesting or mentioning any time slots
+       - If user just mentions a day (e.g., "Thursday"), automatically use the next instance of that day
+
+    3. ALWAYS use create_booking function when:
+       - User selects a time slot
+       - BEFORE confirming the booking
+       - NEVER EVER claim a booking was created without calling this function
+       - NEVER EVER say "I've created your booking" or similar without calling this function
+       - NEVER EVER respond with a success message about a booking without calling this function
+
     VERY IMPORTANT:
-    - Always, on the first response, use the list_businesses function to get the business data.
-    - You MUST use the list_businesses function before claiming to have found information about a business.
-    - You MUST use the find_available_slots function before claiming to have found slots.
-    - You MUST use the create_booking function before claiming to have booked an appointment.
-    - You MUST ALWAYS use the exact businessName, serviceName, and staffName from the business data.
-    - NEVER make up or guess names - they must come from the list_businesses response.
-    - Avoid saying you are going to do something, or that you need to check something first, just do the thing you are saying you are going to do.
+    - NEVER make up or guess information about businesses, services, or availability
+    - NEVER suggest or list times without first calling find_available_slots
+    - NEVER EVER claim a booking was created without first calling create_booking
+    - NEVER EVER say "I've created your booking" or similar without calling create_booking
+    - NEVER EVER respond with a success message about a booking without calling create_booking
+    - ALWAYS use exact names from the business data
+    - Avoid saying you are going to do something, just do it directly
     
     Initial greeting and booking process explanation:
     "Hi! 👋 I'm Aura, your friendly booking assistant.
@@ -283,6 +320,20 @@ export class AIServiceV3 {
     User: "Book me for 14:00"
     Assistant: [CALLS create_booking]
     "I've successfully created your booking for Therapeutic Treatment at Serenity Wellness Centre on Thursday at 14:00 with Dr. Sarah O'Connor. Would you like to book anything else?"
+
+    EXAMPLE OF HANDLING DAY-OF-WEEK REQUESTS:
+    User: "I want to book a haircut on Saturday"
+    Assistant: [CALLS find_available_slots with the next Saturday's date]
+    "Here are the available slots for Haircut at Shear Madness on Saturday, April 13th:
+
+    Mike Johnson:
+    • 10:00 - 10:30
+    • 10:30 - 11:00
+    • 11:00 - 11:30
+    • 14:00 - 14:30
+    • 14:30 - 15:00
+
+    Please select a time slot to proceed with your booking."
     `;
 
     this.model = genAI.getGenerativeModel({ 
@@ -368,9 +419,9 @@ export class AIServiceV3 {
             break;
           case 'create_booking':
             functionResponseData = await this.executeCreateBooking(
-              args.businessId,
-              args.staffId,
-              args.serviceId,
+              args.businessName,
+              args.staffName,
+              args.serviceName,
               args.date,
               args.startTime
             );
@@ -381,6 +432,75 @@ export class AIServiceV3 {
         }
 
         console.log('Function response data:', functionResponseData);
+
+        // Format the function response based on the function type
+        let formattedResponse = '';
+        if (functionResponseData) {
+          switch (name) {
+            case 'list_businesses':
+              const businesses = functionResponseData as any[];
+              if (businesses.length > 0) {
+                formattedResponse = 'Here are the available businesses:\n\n';
+                businesses.forEach(business => {
+                  formattedResponse += `• ${business.businessName} (${business.businessRating}★)\n`;
+                  business.services.forEach((service: any) => {
+                    formattedResponse += `  - ${service.serviceName}: €${service.servicePrice}\n`;
+                  });
+                  formattedResponse += `  Staff:\n`;
+                  business.staff.forEach((staff: any) => {
+                    formattedResponse += `  • ${staff.staffName} - ${staff.staffRole}\n`;
+                  });
+                  formattedResponse += '\n';
+                });
+                formattedResponse += 'What would you like to book?';
+              } else {
+                formattedResponse = 'No businesses found matching your criteria. Please try a different search.';
+              }
+              break;
+
+            case 'find_available_slots':
+              const slots = functionResponseData as any[];
+              if (slots.length > 0) {
+                formattedResponse = `Here are the available slots for ${args.serviceName} at ${args.businessName} on ${args.date}:\n\n`;
+                const slotsByStaff = slots.reduce((acc: any, slot: any) => {
+                  if (!acc[slot.staffName]) {
+                    acc[slot.staffName] = [];
+                  }
+                  acc[slot.staffName].push(slot);
+                  return acc;
+                }, {});
+
+                Object.entries(slotsByStaff).forEach(([staffName, staffSlots]) => {
+                  formattedResponse += `${staffName}:\n`;
+                  (staffSlots as any[]).forEach(slot => {
+                    formattedResponse += `• ${slot.startTime} - ${slot.endTime}\n`;
+                  });
+                  formattedResponse += '\n';
+                });
+                formattedResponse += 'Please select a time slot to proceed with your booking.';
+              } else {
+                formattedResponse = `No available slots found for ${args.serviceName} at ${args.businessName} on ${args.date}. Would you like to try a different date?`;
+              }
+              break;
+
+            case 'create_booking':
+              if (functionResponseData && functionResponseData.id) {
+                formattedResponse = `Successfully created your booking for ${args.serviceName} at ${args.businessName} on ${args.date} at ${args.startTime}. Would you like to book anything else?`;
+              } else {
+                formattedResponse = 'Sorry, I was unable to create your booking. Please try again or select a different time slot.';
+              }
+              break;
+          }
+        }
+
+        if (!formattedResponse) {
+          console.error('Empty formatted response after function call:', {
+            functionName: name,
+            functionArgs: args,
+            functionResponse: functionResponseData
+          });
+          throw new Error('Failed to format response after function call');
+        }
 
         result = await this.chat.sendMessage([
           {
@@ -395,22 +515,48 @@ export class AIServiceV3 {
         response = await result.response;
         console.log('Received final response from model');
 
-        const formattedResponse = response.text();
-        console.log('Formatted response:', formattedResponse);
+        const finalResponse = response.text();
+        console.log('Final response text:', finalResponse);
 
-        if (!formattedResponse || formattedResponse.trim() === '') {
-          console.error('Empty response after function call:', {
-            functionName: name,
-            functionArgs: args,
-            functionResponse: functionResponseData
-          });
-          throw new Error('The model did not generate a response after processing the function call. Please try again.');
+        if (!finalResponse || finalResponse.trim() === '') {
+          console.log('Using formatted response as final response');
+          this.addMessage('model', formattedResponse);
+          return formattedResponse;
         }
 
-        this.addMessage('model', formattedResponse);
-        console.log('Added formatted response to history');
+        // Only check for booking success phrases if there was no function call
+        if (!functionCall) {
+          const bookingSuccessPhrases = [
+            'successfully created your booking',
+            'created your booking',
+            'booked your appointment',
+            'confirmed your booking',
+            'booking is confirmed',
+            'booking has been created'
+          ];
 
-        return formattedResponse;
+          const containsBookingSuccess = bookingSuccessPhrases.some(phrase => 
+            finalResponse.toLowerCase().includes(phrase)
+          );
+
+          if (containsBookingSuccess) {
+            console.log('Model attempted to claim booking success without calling create_booking function. Forcing retry with function call.');
+            
+            // Remove the last message from history (the one claiming success)
+            this.history.pop();
+            
+            // Add a system message to force function call
+            this.addMessage('model', 'I need to properly create your booking using the create_booking function. Please try again.');
+            
+            // Retry the response generation
+            return this.generateResponse(message);
+          }
+        }
+
+        this.addMessage('model', finalResponse);
+        console.log('Added model response to history');
+
+        return finalResponse;
       }
 
       const finalResponse = response.text();
@@ -422,6 +568,35 @@ export class AIServiceV3 {
           history: this.history
         });
         throw new Error('The model did not generate a response. Please try again.');
+      }
+
+      // Only check for booking success phrases if there was no function call
+      if (!functionCall) {
+        const bookingSuccessPhrases = [
+          'successfully created your booking',
+          'created your booking',
+          'booked your appointment',
+          'confirmed your booking',
+          'booking is confirmed',
+          'booking has been created'
+        ];
+
+        const containsBookingSuccess = bookingSuccessPhrases.some(phrase => 
+          finalResponse.toLowerCase().includes(phrase)
+        );
+
+        if (containsBookingSuccess) {
+          console.log('Model attempted to claim booking success without calling create_booking function. Forcing retry with function call.');
+          
+          // Remove the last message from history (the one claiming success)
+          this.history.pop();
+          
+          // Add a system message to force function call
+          this.addMessage('model', 'I need to properly create your booking using the create_booking function. Please try again.');
+          
+          // Retry the response generation
+          return this.generateResponse(message);
+        }
       }
 
       this.addMessage('model', finalResponse);
@@ -555,6 +730,10 @@ export class AIServiceV3 {
       
       const businessDoc = businessSnapshot.docs[0];
       const business = businessDoc.data() as FirestoreBusiness;
+      console.log('Found business:', { 
+        name: business.name, 
+        openingHours: business.openingHours 
+      });
       
       // Get the service
       const servicesRef = collection(businessDoc.ref, 'services');
@@ -567,9 +746,15 @@ export class AIServiceV3 {
       }
       
       const service = serviceSnapshot.docs[0].data() as FirestoreService;
+      console.log('Found service:', { 
+        name: service.name, 
+        duration: service.duration,
+        staffIds: service.staffIds 
+      });
       
       // Get the day of the week
       const dayOfWeek = new Date(date).toLocaleDateString('en-IE', { weekday: 'long' });
+      console.log('Day of week:', dayOfWeek);
       
       // Get all staff members for this service
       const staffRef = collection(businessDoc.ref, 'staff');
@@ -586,6 +771,12 @@ export class AIServiceV3 {
         .map(doc => ({ ...(doc.data() as FirestoreStaff), id: doc.id }))
         .filter(staff => service.staffIds.includes(staff.id));
       
+      console.log('Relevant staff:', relevantStaff.map(staff => ({
+        name: staff.name,
+        workingDays: staff.workingDays,
+        worksOnDay: staff.workingDays.includes(dayOfWeek)
+      })));
+      
       // Get all bookings for the date
       const bookingsRef = collection(businessDoc.ref, 'bookings');
       const dateQuery = query(bookingsRef, where('date', '==', date));
@@ -595,18 +786,28 @@ export class AIServiceV3 {
           ...(doc.data() as FirestoreBooking),
           id: doc.id
         }))
-        .filter(booking => booking.status !== 'cancelled'); // Filter cancelled bookings in memory
+        .filter(booking => booking.status !== 'cancelled');
+      
+      console.log('Existing bookings for date:', dateBookings);
       
       const availableSlots: { staffName: string, startTime: string, endTime: string }[] = [];
       
       // For each staff member
       for (const staff of relevantStaff) {
         // Check if staff member works on this day
-        if (!staff.workingDays.includes(dayOfWeek)) continue;
+        if (!staff.workingDays.includes(dayOfWeek)) {
+          console.log(`Staff member ${staff.name} does not work on ${dayOfWeek}`);
+          continue;
+        }
         
         // Get business opening hours for this day
         const openingHours = business.openingHours[dayOfWeek];
-        if (!openingHours) continue;
+        if (!openingHours) {
+          console.log(`No opening hours found for ${dayOfWeek}`);
+          continue;
+        }
+        
+        console.log(`Opening hours for ${dayOfWeek}:`, openingHours);
         
         // Parse opening hours
         const [openTime, closeTime] = openingHours.split(' - ');
@@ -622,6 +823,8 @@ export class AIServiceV3 {
         if (closeTime.includes('PM') && endHour !== 12) endHour += 12;
         if (closeTime.includes('AM') && endHour === 12) endHour = 0;
         
+        console.log('Converted hours:', { startHour, endHour });
+        
         // Create slots from opening time until closing time
         let currentTime = new Date();
         currentTime.setFullYear(new Date(date).getFullYear());
@@ -631,6 +834,11 @@ export class AIServiceV3 {
         
         const endTime = new Date(currentTime);
         endTime.setHours(endHour, closeMinute, 0, 0);
+        
+        console.log('Time range:', {
+          start: currentTime.toLocaleTimeString(),
+          end: endTime.toLocaleTimeString()
+        });
         
         while (currentTime < endTime) {
           const slotStartTime = currentTime.toLocaleTimeString('en-IE', { 
@@ -678,6 +886,7 @@ export class AIServiceV3 {
         }
       }
       
+      console.log('Available slots:', availableSlots);
       return availableSlots;
     } catch (error) {
       console.error('Error in executeFindAvailableSlots:', error);
@@ -686,50 +895,144 @@ export class AIServiceV3 {
   }
 
   private async executeCreateBooking(
-    businessId: string,
-    staffId: string,
-    serviceId: string,
+    businessName: string,
+    staffName: string,
+    serviceName: string,
     date: string,
     startTime: string
   ): Promise<any> {
     try {
-      console.log('Starting executeCreateBooking with:', { businessId, staffId, serviceId, date, startTime });
+      console.log('Starting executeCreateBooking with:', { businessName, staffName, serviceName, date, startTime });
       
-      const businessRef = doc(db, 'businesses', businessId);
-      const businessDoc = await getDoc(businessRef);
+      // Get the current user's ID
+      const auth = getAuth();
+      if (!auth.currentUser) {
+        console.error('No authenticated user found');
+        throw new Error('User must be authenticated to create a booking');
+      }
       
-      if (!businessDoc.exists()) {
+      const userId = auth.currentUser.uid;
+      console.log('Creating booking for user:', userId);
+      
+      // First find the business by name
+      const businessesRef = collection(db, 'businesses');
+      const businessQuery = query(businessesRef, where('name', '==', businessName));
+      const businessSnapshot = await getDocs(businessQuery);
+      
+      if (businessSnapshot.empty) {
+        console.log('No business found with name:', businessName);
         throw new Error('Business not found');
       }
       
-      // Get the service to get duration
-      const serviceRef = doc(collection(businessRef, 'services'), serviceId);
-      const serviceDoc = await getDoc(serviceRef);
+      const businessDoc = businessSnapshot.docs[0];
+      const business = businessDoc.data() as FirestoreBusiness;
+      console.log('Found business:', { 
+        id: businessDoc.id,
+        name: business.name 
+      });
       
-      if (!serviceDoc.exists()) {
+      // Get the service to get duration
+      const servicesRef = collection(businessDoc.ref, 'services');
+      const serviceQuery = query(servicesRef, where('name', '==', serviceName));
+      const serviceSnapshot = await getDocs(serviceQuery);
+      
+      if (serviceSnapshot.empty) {
+        console.log('No service found with name:', serviceName);
         throw new Error('Service not found');
       }
       
+      const serviceDoc = serviceSnapshot.docs[0];
       const service = serviceDoc.data() as FirestoreService;
+      console.log('Found service:', { 
+        id: serviceDoc.id,
+        name: service.name,
+        duration: service.duration 
+      });
       
-      // Create the booking
-      const bookingsRef = collection(businessRef, 'bookings');
-      const newBooking = {
-        staffId,
-        serviceId,
+      // Get the staff member
+      const staffRef = collection(businessDoc.ref, 'staff');
+      const staffQuery = query(staffRef, where('name', '==', staffName));
+      const staffSnapshot = await getDocs(staffQuery);
+      
+      if (staffSnapshot.empty) {
+        console.log('No staff member found with name:', staffName);
+        throw new Error('Staff member not found');
+      }
+      
+      const staffDoc = staffSnapshot.docs[0];
+      const staffData = staffDoc.data() as FirestoreStaff;
+      console.log('Found staff member:', { 
+        id: staffDoc.id,
+        name: staffName 
+      });
+
+      // Check if a booking already exists for this time slot
+      const bookingsRef = collection(businessDoc.ref, 'bookings');
+      const existingBookingsQuery = query(
+        bookingsRef,
+        where('date', '==', date),
+        where('startTime', '==', startTime),
+        where('staffId', '==', staffDoc.id),
+        where('status', '==', 'confirmed')
+      );
+      
+      const existingBookings = await getDocs(existingBookingsQuery);
+      if (!existingBookings.empty) {
+        console.log('Booking already exists for this time slot');
+        throw new Error('This time slot is already booked');
+      }
+
+      // Generate a proper UUID format using the uuid library
+      const uuid = uuidv4();
+
+      // Create the minimal booking object with only required fields
+      const businessBooking = {
+        id: uuid,
+        businessId: businessDoc.id,
+        staffId: staffDoc.id,
+        serviceId: serviceDoc.id,
+        userId: userId,
         date,
         startTime,
         duration: service.duration,
         status: 'confirmed',
-        createdAt: Timestamp.now()
+        createdAt: new Date().toISOString()
       };
       
-      const docRef = await addDoc(bookingsRef, newBooking);
-      
-      return {
-        id: docRef.id,
-        ...newBooking
+      // Create the booking document with the generated ID
+      const bookingDocRef = doc(bookingsRef, uuid);
+      await setDoc(bookingDocRef, businessBooking);
+      console.log('Created booking in business collection:', businessBooking);
+
+      // Create the user's booking with additional fields
+      const userBooking = {
+        id: uuid,
+        businessId: businessDoc.id,
+        businessName: business.name,
+        businessAddress: business.address,
+        staffId: staffDoc.id,
+        staffName: staffData.name,
+        serviceId: serviceDoc.id,
+        serviceName: service.name,
+        servicePrice: service.price,
+        serviceDuration: service.duration,
+        userId: userId,
+        userEmail: auth.currentUser.email,
+        date,
+        startTime,
+        duration: service.duration,
+        status: 'confirmed',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
+
+      // Create the booking in the user's bookings collection with the same ID
+      const userBookingsRef = collection(db, 'users', userId, 'bookings');
+      const userBookingDocRef = doc(userBookingsRef, uuid);
+      await setDoc(userBookingDocRef, userBooking);
+      console.log('Created booking in user collection:', userBooking);
+      
+      return businessBooking;
     } catch (error) {
       console.error('Error in executeCreateBooking:', error);
       return null;
