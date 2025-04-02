@@ -1,12 +1,59 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, SchemaType, Tool } from '@google/generative-ai';
 import { ChatMessage } from '@/types/chat';
-import { 
-  getAllBusinesses,
-  createBooking,
-  findAvailableSlotsForService
-} from '@/data/dummyBusinesses';
 import { db } from '../firebase-config';
-import { collection, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  doc, 
+  getDoc, 
+  Timestamp, 
+  addDoc,
+  DocumentData 
+} from 'firebase/firestore';
+
+interface FirestoreBooking {
+  id: string;
+  staffId: string;
+  serviceId: string;
+  date: string;
+  startTime: string;
+  duration: number;
+  status: string;
+  createdAt: Timestamp;
+}
+
+interface FirestoreService {
+  id: string;
+  name: string;
+  duration: number;
+  staffIds: string[];
+  price: number;
+  description: string;
+}
+
+interface FirestoreStaff {
+  id: string;
+  name: string;
+  workingDays: string[];
+  role: string;
+  imageUrl: string;
+  bio: string;
+}
+
+interface FirestoreBusiness {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  rating: number;
+  reviews: number;
+  city: string;
+  address: string;
+  imageUrl: string;
+  openingHours: Record<string, string>;
+}
 
 const tools: Tool[] = [{
   functionDeclarations: [
@@ -430,43 +477,57 @@ export class AIServiceV3 {
   private async executeListBusinesses() {
     try {
       console.log('Starting executeListBusinesses');
-      const businesses = await getAllBusinesses();
-      console.log('Retrieved businesses:', businesses.map(b => ({ name: b.name, city: b.city })));
+      const businessesRef = collection(db, 'businesses');
+      const businessesSnapshot = await getDocs(businessesRef);
+      const businesses = [];
 
-      if (businesses.length === 0) {
-        console.log('No businesses found');
-        return [];
+      for (const businessDoc of businessesSnapshot.docs) {
+        const businessData = businessDoc.data() as FirestoreBusiness;
+        
+        // Get services
+        const servicesRef = collection(businessDoc.ref, 'services');
+        const servicesSnapshot = await getDocs(servicesRef);
+        const services = servicesSnapshot.docs.map(doc => ({
+          ...(doc.data() as FirestoreService),
+          id: doc.id
+        }));
+
+        // Get staff
+        const staffRef = collection(businessDoc.ref, 'staff');
+        const staffSnapshot = await getDocs(staffRef);
+        const staff = staffSnapshot.docs.map(doc => ({
+          ...(doc.data() as FirestoreStaff),
+          id: doc.id
+        }));
+
+        businesses.push({
+          businessName: businessData.name,
+          businessDescription: businessData.description,
+          businessType: businessData.type,
+          businessRating: businessData.rating,
+          businessReviews: businessData.reviews,
+          businessCity: businessData.city,
+          staff: staff.map(s => ({
+            staffName: s.name,
+            staffRole: s.role,
+            staffWorkingDays: s.workingDays
+          })),
+          services: services.map(s => ({
+            serviceName: s.name,
+            servicePrice: s.price,
+            serviceDuration: s.duration,
+            serviceStaffMembers: s.staffIds.map(id => 
+              staff.find(st => st.id === id)?.name
+            ).filter(Boolean)
+          }))
+        });
       }
 
-      const result = businesses.map(business => ({
-        businessName: business.name,
-        businessDescription: business.description,
-        businessType: business.type,
-        businessRating: business.rating,
-        businessReviews: business.reviews,
-        businessCity: business.city,
-        staff: business.staff.map(staff => ({
-          staffName: staff.name,
-          staffRole: staff.role,
-          staffWorkingDays: staff.workingDays
-        })),
-        services: business.services.map(service => ({
-          serviceName: service.name,
-          servicePrice: service.price,
-          serviceDuration: service.duration,
-          serviceStaffMembers: service.staffIds.map(id => 
-            business.staff.find(s => s.id === id)?.name
-          ).filter(Boolean)
-        }))
-      }));
-
-      console.log('Final results:', result.map(b => ({ 
+      console.log('Retrieved businesses:', businesses.map(b => ({ 
         businessName: b.businessName, 
-        businessCity: b.businessCity,
-        services: b.services.map(s => s.serviceName),
-        staff: b.staff.map(s => s.staffName)
+        businessCity: b.businessCity 
       })));
-      return result;
+      return businesses;
     } catch (error) {
       console.error('Error in executeListBusinesses:', error);
       return [];
@@ -478,108 +539,200 @@ export class AIServiceV3 {
     serviceName: string,
     date: string,
     staffName?: string
-  ) {
+  ): Promise<{ staffName: string, startTime: string, endTime: string }[]> {
     try {
       console.log('Starting executeFindAvailableSlots with:', { businessName, serviceName, date, staffName });
-      const slots = await findAvailableSlotsForService(businessName, serviceName, date, staffName);
-      console.log('Found available slots:', slots);
-      return slots;
+      
+      // Find the business
+      const businessesRef = collection(db, 'businesses');
+      const businessQuery = query(businessesRef, where('name', '==', businessName));
+      const businessSnapshot = await getDocs(businessQuery);
+      
+      if (businessSnapshot.empty) {
+        console.log('No business found with name:', businessName);
+        return [];
+      }
+      
+      const businessDoc = businessSnapshot.docs[0];
+      const business = businessDoc.data() as FirestoreBusiness;
+      
+      // Get the service
+      const servicesRef = collection(businessDoc.ref, 'services');
+      const serviceQuery = query(servicesRef, where('name', '==', serviceName));
+      const serviceSnapshot = await getDocs(serviceQuery);
+      
+      if (serviceSnapshot.empty) {
+        console.log('No service found with name:', serviceName);
+        return [];
+      }
+      
+      const service = serviceSnapshot.docs[0].data() as FirestoreService;
+      
+      // Get the day of the week
+      const dayOfWeek = new Date(date).toLocaleDateString('en-IE', { weekday: 'long' });
+      
+      // Get all staff members for this service
+      const staffRef = collection(businessDoc.ref, 'staff');
+      let staffSnapshot;
+      
+      if (staffName) {
+        const staffQuery = query(staffRef, where('name', '==', staffName));
+        staffSnapshot = await getDocs(staffQuery);
+      } else {
+        staffSnapshot = await getDocs(staffRef);
+      }
+      
+      const relevantStaff = staffSnapshot.docs
+        .map(doc => ({ ...(doc.data() as FirestoreStaff), id: doc.id }))
+        .filter(staff => service.staffIds.includes(staff.id));
+      
+      // Get all bookings for the date
+      const bookingsRef = collection(businessDoc.ref, 'bookings');
+      const dateQuery = query(bookingsRef, where('date', '==', date));
+      const bookingsSnapshot = await getDocs(dateQuery);
+      const dateBookings = bookingsSnapshot.docs
+        .map(doc => ({
+          ...(doc.data() as FirestoreBooking),
+          id: doc.id
+        }))
+        .filter(booking => booking.status !== 'cancelled'); // Filter cancelled bookings in memory
+      
+      const availableSlots: { staffName: string, startTime: string, endTime: string }[] = [];
+      
+      // For each staff member
+      for (const staff of relevantStaff) {
+        // Check if staff member works on this day
+        if (!staff.workingDays.includes(dayOfWeek)) continue;
+        
+        // Get business opening hours for this day
+        const openingHours = business.openingHours[dayOfWeek];
+        if (!openingHours) continue;
+        
+        // Parse opening hours
+        const [openTime, closeTime] = openingHours.split(' - ');
+        const [openHour, openMinute] = openTime.split(' ')[0].split(':').map(Number);
+        const [closeHour, closeMinute] = closeTime.split(' ')[0].split(':').map(Number);
+        
+        // Convert to 24-hour format
+        let startHour = openHour;
+        let endHour = closeHour;
+        
+        if (openTime.includes('PM') && startHour !== 12) startHour += 12;
+        if (openTime.includes('AM') && startHour === 12) startHour = 0;
+        if (closeTime.includes('PM') && endHour !== 12) endHour += 12;
+        if (closeTime.includes('AM') && endHour === 12) endHour = 0;
+        
+        // Create slots from opening time until closing time
+        let currentTime = new Date();
+        currentTime.setFullYear(new Date(date).getFullYear());
+        currentTime.setMonth(new Date(date).getMonth());
+        currentTime.setDate(new Date(date).getDate());
+        currentTime.setHours(startHour, openMinute, 0, 0);
+        
+        const endTime = new Date(currentTime);
+        endTime.setHours(endHour, closeMinute, 0, 0);
+        
+        while (currentTime < endTime) {
+          const slotStartTime = currentTime.toLocaleTimeString('en-IE', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+          });
+          
+          // Calculate slot end time based on service duration
+          const slotEndTime = new Date(currentTime.getTime() + (service.duration * 60000));
+          
+          // Check if this slot overlaps with any existing active bookings
+          const isOverlapping = dateBookings.some(booking => {
+            if (booking.staffId !== staff.id) return false;
+            
+            // Create date objects for booking times
+            const [bookingHour, bookingMinute] = booking.startTime.split(':').map(Number);
+            const bookingStart = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate(), bookingHour, bookingMinute, 0, 0);
+            const bookingEnd = new Date(bookingStart.getTime() + (booking.duration * 60000));
+            
+            // Check for overlap
+            return (
+              (currentTime >= bookingStart && currentTime < bookingEnd) ||
+              (slotEndTime > bookingStart && slotEndTime <= bookingEnd) ||
+              (currentTime <= bookingStart && slotEndTime >= bookingEnd)
+            );
+          });
+          
+          // Check if the slot would extend past closing time
+          const wouldExtendPastClosing = slotEndTime > endTime;
+          
+          if (!isOverlapping && !wouldExtendPastClosing) {
+            availableSlots.push({
+              staffName: staff.name,
+              startTime: slotStartTime,
+              endTime: slotEndTime.toLocaleTimeString('en-IE', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false 
+              })
+            });
+          }
+          
+          currentTime.setMinutes(currentTime.getMinutes() + 30);
+        }
+      }
+      
+      return availableSlots;
     } catch (error) {
       console.error('Error in executeFindAvailableSlots:', error);
       return [];
     }
   }
 
-    private async executeCreateBooking(
+  private async executeCreateBooking(
     businessId: string,
     staffId: string,
     serviceId: string,
     date: string,
     startTime: string
-  ) {
+  ): Promise<any> {
     try {
       console.log('Starting executeCreateBooking with:', { businessId, staffId, serviceId, date, startTime });
-      const booking = await createBooking(businessId, staffId, serviceId, date, startTime);
-      console.log('Created booking:', booking);
-      return booking;
+      
+      const businessRef = doc(db, 'businesses', businessId);
+      const businessDoc = await getDoc(businessRef);
+      
+      if (!businessDoc.exists()) {
+        throw new Error('Business not found');
+      }
+      
+      // Get the service to get duration
+      const serviceRef = doc(collection(businessRef, 'services'), serviceId);
+      const serviceDoc = await getDoc(serviceRef);
+      
+      if (!serviceDoc.exists()) {
+        throw new Error('Service not found');
+      }
+      
+      const service = serviceDoc.data() as FirestoreService;
+      
+      // Create the booking
+      const bookingsRef = collection(businessRef, 'bookings');
+      const newBooking = {
+        staffId,
+        serviceId,
+        date,
+        startTime,
+        duration: service.duration,
+        status: 'confirmed',
+        createdAt: Timestamp.now()
+      };
+      
+      const docRef = await addDoc(bookingsRef, newBooking);
+      
+      return {
+        id: docRef.id,
+        ...newBooking
+      };
     } catch (error) {
       console.error('Error in executeCreateBooking:', error);
       return null;
     }
-  }
-}
-
-export async function loadDummyDataToFirestore() {
-  try {
-    const businesses = await getAllBusinesses();
-    const batch = writeBatch(db);
-    
-    for (const business of businesses) {
-      // Create business document
-      const businessRef = doc(collection(db, 'businesses'), business.id);
-      
-      // Create business data without nested arrays
-      const businessData = {
-        id: business.id,
-        name: business.name,
-        description: business.description,
-        address: business.address,
-        city: business.city,
-        rating: business.rating,
-        reviews: business.reviews,
-        imageUrl: business.imageUrl,
-        type: business.type,
-        openingHours: business.openingHours
-      };
-      
-      // Set business document
-      batch.set(businessRef, businessData);
-      
-      // Create staff subcollection
-      for (const staff of business.staff) {
-        const staffRef = doc(collection(businessRef, 'staff'), staff.id);
-        batch.set(staffRef, {
-          id: staff.id,
-          name: staff.name,
-          role: staff.role,
-          imageUrl: staff.imageUrl,
-          bio: staff.bio,
-          workingDays: staff.workingDays
-        });
-      }
-      
-      // Create services subcollection
-      for (const service of business.services) {
-        const serviceRef = doc(collection(businessRef, 'services'), service.id);
-        batch.set(serviceRef, {
-          id: service.id,
-          name: service.name,
-          price: service.price,
-          duration: service.duration,
-          description: service.description,
-          staffIds: service.staffIds
-        });
-      }
-      
-      // Create bookings subcollection
-      for (const booking of business.bookings) {
-        const bookingRef = doc(collection(businessRef, 'bookings'), booking.id);
-        batch.set(bookingRef, {
-          id: booking.id,
-          staffId: booking.staffId,
-          serviceId: booking.serviceId,
-          date: booking.date,
-          startTime: booking.startTime,
-          duration: booking.duration
-        });
-      }
-    }
-    
-    // Commit all writes
-    await batch.commit();
-    return { success: true, message: 'Successfully loaded dummy data to Firestore' };
-  } catch (error) {
-    console.error('Error loading dummy data to Firestore:', error);
-    throw new Error('Failed to load dummy data to Firestore');
   }
 } 

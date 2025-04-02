@@ -87,3 +87,63 @@ export const deleteUserDocuments = functions
       throw error;
     }
   });
+
+export const onBookingUpdate = functions
+  .region("europe-west2")
+  .firestore
+  .document("businesses/{businessId}/bookings/{bookingId}")
+  .onWrite(async (change, context) => {
+    const {bookingId} = context.params;
+    // Get an admin firestore instance
+    const db = admin.firestore();
+    // If the document was deleted
+    if (!change.after.exists) {
+      // Find the user ID from the old document
+      const userId = change.before.data()?.userId;
+      if (userId) {
+        // Delete the corresponding user booking
+        await db.doc(`users/${userId}/bookings/${bookingId}`).delete();
+      }
+      return;
+    }
+    // Get the updated booking data
+    const bookingData = change.after.data();
+    if (!bookingData) {
+      console.error("No booking data found");
+      return;
+    }
+    const userId = bookingData.userId;
+    // Update the corresponding user booking
+    await db.doc(`users/${userId}/bookings/${bookingId}`).set(bookingData);
+  });
+
+export const onUserBookingUpdate = functions
+  .region("europe-west2")
+  .firestore
+  .document("users/{userId}/bookings/{bookingId}")
+  .onWrite(async (change, context) => {
+    const {bookingId} = context.params;
+    // Get an admin firestore instance
+    const db = admin.firestore();
+    // If the document was deleted
+    if (!change.after.exists) {
+      // Find the business ID from the old document
+      const businessId = change.before.data()?.businessId;
+      if (businessId) {
+        // Delete the corresponding business booking
+        await db.doc(`businesses/${businessId}/bookings/${bookingId}`).delete();
+      }
+      return;
+    }
+    // Get the updated booking data
+    const bookingData = change.after.data();
+    if (!bookingData) {
+      console.error("No booking data found");
+      return;
+    }
+    const businessId = bookingData.businessId;
+    // Update the corresponding business booking
+    await db
+      .doc(`businesses/${businessId}/bookings/${bookingId}`)
+      .set(bookingData);
+  });

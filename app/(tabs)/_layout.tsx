@@ -56,13 +56,18 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="profile/index"
+          name="my-bookings"
+          options={{
+            title: 'My Bookings',
+            tabBarIcon: ({ color }) => <Ionicons name="calendar-outline" size={24} color={color} />,
+            headerShown: false,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
           options={{
             title: 'Profile',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="person-outline" size={size} color={color} />
-            ),
-            href: '/profile',
+            tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} />,
           }}
         />
       </Tabs>
