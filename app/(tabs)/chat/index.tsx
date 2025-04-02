@@ -109,28 +109,6 @@ export default function ChatScreen() {
     }
   };
 
-  const startPulseAnimation = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.2,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  };
-
-  const stopPulseAnimation = () => {
-    pulseAnim.stopAnimation();
-    pulseAnim.setValue(1);
-  };
-
   const startRecording = async () => {
     try {
       if (isButtonDisabled) return;
@@ -162,52 +140,6 @@ export default function ChatScreen() {
       setShowCancelUI(false);
       recordingRef.current = null;
       setIsButtonDisabled(false);
-    }
-  };
-
-  const convertAudioToText = async (audioUri: string): Promise<string> => {
-    try {
-      // Read the audio file
-      const audioBase64 = await FileSystem.readAsStringAsync(audioUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      // Send to Google Cloud Speech-to-Text API
-      const response = await fetch('https://speech.googleapis.com/v1/speech:recognize', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.GOOGLE_AI_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          config: {
-            encoding: 'LINEAR16',
-            sampleRateHertz: 44100,
-            languageCode: 'en-IE',
-            model: 'default',
-            useEnhanced: true,
-          },
-          audio: {
-            content: audioBase64,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Speech-to-text API error:', errorData);
-        throw new Error(errorData.error?.message || 'Speech-to-text conversion failed');
-      }
-
-      const data = await response.json();
-      if (data.results && data.results[0] && data.results[0].alternatives) {
-        return data.results[0].alternatives[0].transcript;
-      }
-
-      throw new Error('No transcription found');
-    } catch (error) {
-      console.error('Error converting audio to text:', error);
-      throw error;
     }
   };
 
@@ -444,18 +376,6 @@ export default function ChatScreen() {
     }
   };
 
-  const stopPlayback = async () => {
-    try {
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-        setIsPlaying(null);
-      }
-    } catch (error) {
-      console.error('Error stopping playback:', error);
-    }
-  };
-
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.role === 'user';
     const isAudio = item.audioUri !== undefined;
@@ -662,13 +582,8 @@ const styles = StyleSheet.create({
   refreshButton: {
     padding: 4,
   },
-  content: {
-    flex: 1,
-  },
   messagesList: {
     padding: 16,
-  },
-  messageGroup: {
   },
   messageContainer: {
     maxWidth: "80%",
@@ -686,14 +601,6 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     backgroundColor: "#F0F0F0",
   },
-  errorMessage: {
-    alignSelf: "flex-start",
-    backgroundColor: "#FFE5E5",
-  },
-  messageText: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
   userMessageText: {
     fontSize: 16,
     lineHeight: 24,
@@ -703,9 +610,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: "#000000",
-  },
-  messageLoader: {
-    marginVertical: 8,
   },
   inputContainer: {
     borderTopWidth: 1,
@@ -757,41 +661,6 @@ const styles = StyleSheet.create({
   actionButtonDisabled: {
     backgroundColor: "#E5E5EA",
   },
-  boldText: {
-    fontWeight: "bold",
-  },
-  italicText: {
-    fontStyle: "italic",
-  },
-  bulletList: {
-    marginLeft: 16,
-    flexShrink: 1,
-  },
-  bulletListIcon: {
-    marginRight: 8,
-  },
-  codeText: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    backgroundColor: "#F5F5F5",
-    padding: 4,
-    borderRadius: 4,
-    flexShrink: 1,
-  },
-  codeInline: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    backgroundColor: "#F5F5F5",
-    padding: 2,
-    borderRadius: 4,
-    flexShrink: 1,
-  },
-  codeBlock: {
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-    backgroundColor: "#F5F5F5",
-    padding: 8,
-    borderRadius: 4,
-    marginVertical: 8,
-    flexShrink: 1,
-  },
   audioMessageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -834,18 +703,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 1,
   },
-  micButtonDisabled: {
-    opacity: 0.5,
-  },
-  messageContent: {
-    flex: 1,
-  },
-  userMessageContent: {
-    alignItems: 'flex-end',
-  },
-  aiMessageContent: {
-    alignItems: 'flex-start',
-  },
   textMessageContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -860,80 +717,6 @@ const styles = StyleSheet.create({
   processingText: {
     marginLeft: 8,
     fontSize: 16,
-  },
-  markdownContainer: {
-    flex: 1,
-    width: '100%',
-  },
-  markdownText: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#000000',
-    flexWrap: 'wrap',
-  },
-  markdownParagraph: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#000000',
-    marginVertical: 4,
-    flexWrap: 'wrap',
-    flexDirection: 'row',
-  },
-  markdownStrong: {
-    fontWeight: 'bold',
-  },
-  markdownEm: {
-    fontStyle: 'italic',
-  },
-  markdownCode: {
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    backgroundColor: '#e0e0e0',
-    padding: 4,
-    borderRadius: 4,
-  },
-  markdownBulletList: {
-    marginVertical: 4,
-    paddingLeft: 16,
-  },
-  markdownOrderedList: {
-    marginVertical: 4,
-    paddingLeft: 16,
-  },
-  markdownListItem: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#000000',
-    marginVertical: 2,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  markdownHeading1: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginVertical: 8,
-  },
-  markdownHeading2: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginVertical: 6,
-  },
-  markdownHeading3: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginVertical: 4,
-  },
-  markdownLink: {
-    color: '#007AFF',
-    textDecorationLine: 'underline',
-  },
-  markdownBlockQuote: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#ccc',
-    paddingLeft: 8,
-    marginVertical: 4,
-    backgroundColor: '#e0e0e0',
-    padding: 8,
-    borderRadius: 4,
   },
   cancelUI: {
     position: 'absolute',

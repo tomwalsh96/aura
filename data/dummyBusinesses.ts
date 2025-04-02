@@ -8,15 +8,16 @@ interface StaffMember {
   role: string;
   imageUrl: string;
   bio: string;
-  workingDays: string[]; // Array of days they work (e.g., ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"])
+  workingDays: string[];
 }
 
-interface TimeSlot {
+interface Service {
   id: string;
-  startTime: string;
-  endTime: string;
-  isAvailable: boolean;
-  staffId: string;
+  name: string;
+  price: number;
+  duration: number;
+  description: string;
+  staffIds: string[];
 }
 
 interface Booking {
@@ -25,16 +26,7 @@ interface Booking {
   serviceId: string;
   date: string;
   startTime: string;
-  duration: number; // in minutes
-}
-
-interface Service {
-  id: string;
-  name: string;
-  price: number;
-  duration: number; // in minutes (30 or 60)
-  description: string;
-  staffIds: string[];
+  duration: number;
 }
 
 interface BusinessWithDetails extends Business {
@@ -868,275 +860,9 @@ export const dummyBusinesses: BusinessWithDetails[] = [
   }
 ];
 
-export async function getAllBusinesses(): Promise<BusinessWithDetails[]> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return dummyBusinesses;
-}
-
-export async function getBusinessData(businessId: string): Promise<BusinessWithDetails | null> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return dummyBusinesses.find(b => b.id === businessId) || null;
-}
-
-export async function getAvailableTimeSlots(businessId: string, date: string): Promise<{ staffId: string, startTime: string, endTime: string }[]> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const business = dummyBusinesses.find(b => b.id === businessId);
-  if (!business) return [];
-  
-  const availableSlots: { staffId: string, startTime: string, endTime: string }[] = [];
-  
-  // Get the day of the week from the date
-  const dayOfWeek = new Date(date).toLocaleDateString('en-IE', { weekday: 'long' });
-  
-  // Get all bookings for the date
-  const dateBookings = business.bookings.filter(booking => booking.date === date);
-  
-  // For each staff member
-  business.staff.forEach(staff => {
-    // Check if staff member works on this day
-    if (!staff.workingDays.includes(dayOfWeek)) return;
-    
-    // Get business opening hours for this day
-    const openingHours = business.openingHours[dayOfWeek];
-    if (!openingHours) return;
-    
-    // Parse opening hours
-    const [openTime] = openingHours.split(' - ');
-    const [time, period] = openTime.split(' ');
-    const [hours, minutes] = time.split(':').map(Number);
-    let startHour = hours;
-    
-    // Convert to 24-hour format
-    if (period === 'PM' && startHour !== 12) {
-      startHour += 12;
-    } else if (period === 'AM' && startHour === 12) {
-      startHour = 0;
-    }
-    
-    // Create 30-minute slots from opening time until closing time
-    let currentTime = new Date();
-    currentTime.setHours(startHour, minutes, 0, 0);
-    
-    // Default closing time (can be adjusted based on business hours)
-    const endTime = new Date();
-    endTime.setHours(18, 0, 0, 0); // 6 PM default
-    
-    while (currentTime < endTime) {
-      const slotStartTime = currentTime.toLocaleTimeString('en-IE', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-      });
-      
-      // Check if this slot overlaps with any existing bookings
-      const isOverlapping = dateBookings.some(booking => {
-        if (booking.staffId !== staff.id) return false;
-        
-        // Create date objects for booking times
-        const [bookingHour, bookingMinute] = booking.startTime.split(':').map(Number);
-        const bookingStart = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate(), bookingHour, bookingMinute, 0, 0);
-        const bookingEnd = new Date(bookingStart.getTime() + (booking.duration * 60000));
-        
-        // Check for overlap
-        return (
-          (currentTime >= bookingStart && currentTime < bookingEnd) ||
-          (new Date(currentTime.getTime() + 30 * 60000) > bookingStart && new Date(currentTime.getTime() + 30 * 60000) <= bookingEnd) ||
-          (currentTime <= bookingStart && new Date(currentTime.getTime() + 30 * 60000) >= bookingEnd)
-        );
-      });
-      
-      if (!isOverlapping) {
-        availableSlots.push({
-          staffId: staff.id,
-          startTime: slotStartTime,
-          endTime: new Date(currentTime.getTime() + 30 * 60000).toLocaleTimeString('en-IE', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false 
-          })
-        });
-      }
-      
-      currentTime.setMinutes(currentTime.getMinutes() + 30);
-    }
-  });
-  
-  return availableSlots;
-}
-
-export async function getStaffMembers(businessId: string): Promise<StaffMember[]> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const business = dummyBusinesses.find(b => b.id === businessId);
-  return business?.staff || [];
-}
-
-export async function getServices(businessId: string): Promise<Service[]> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const business = dummyBusinesses.find(b => b.id === businessId);
-  return business?.services || [];
-}
-
-export async function createBooking(
-  businessId: string,
-  staffId: string,
-  serviceId: string,
-  date: string,
-  startTime: string
-): Promise<Booking> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const business = dummyBusinesses.find(b => b.id === businessId);
-  if (!business) throw new Error("Business not found");
-  
-  const service = business.services.find(s => s.id === serviceId);
-  if (!service) throw new Error("Service not found");
-  
-  // Check if the slot is available
-  const availableSlots = await getAvailableTimeSlots(businessId, date);
-  const isSlotAvailable = availableSlots.some(slot => 
-    slot.staffId === staffId && 
-    slot.startTime === startTime
-  );
-  
-  if (!isSlotAvailable) {
-    throw new Error("Time slot is not available");
-  }
-  
-  const newBooking: Booking = {
-    id: `550e8400-e29b-41d4-a716-446655440${business.bookings.length + 1}`,
-    staffId,
-    serviceId,
-    date,
-    startTime,
-    duration: service.duration
-  };
-  
-  business.bookings.push(newBooking);
-  return newBooking;
-}
-
-export async function cancelBooking(businessId: string, bookingId: string): Promise<boolean> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const business = dummyBusinesses.find(b => b.id === businessId);
-  if (!business) return false;
-  
-  const bookingIndex = business.bookings.findIndex(b => b.id === bookingId);
-  if (bookingIndex === -1) return false;
-  
-  business.bookings.splice(bookingIndex, 1);
-  return true;
-}
-
-export async function findAvailableSlotsForService(
-  businessName: string,
-  serviceName: string,
-  date: string,
-  staffName?: string
-): Promise<{ staffName: string, startTime: string, endTime: string }[]> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  const business = dummyBusinesses.find(b => b.name === businessName);
-  if (!business) return [];
-  
-  const service = business.services.find(s => s.name === serviceName);
-  if (!service) return [];
-  
-  // Get the day of the week from the date
-  const dayOfWeek = new Date(date).toLocaleDateString('en-IE', { weekday: 'long' });
-  
-  // Get all bookings for the date
-  const dateBookings = business.bookings.filter(booking => booking.date === date);
-  
-  // Get relevant staff members
-  const relevantStaff = staffName 
-    ? business.staff.filter(s => s.name === staffName)
-    : business.staff.filter(s => service.staffIds.includes(s.id));
-  
-  const availableSlots: { staffName: string, startTime: string, endTime: string }[] = [];
-  
-  // For each staff member
-  relevantStaff.forEach(staff => {
-    // Check if staff member works on this day
-    if (!staff.workingDays.includes(dayOfWeek)) return;
-    
-    // Get business opening hours for this day
-    const openingHours = business.openingHours[dayOfWeek];
-    if (!openingHours) return;
-    
-    // Parse opening hours
-    const [openTime, closeTime] = openingHours.split(' - ');
-    const [openHour, openMinute] = openTime.split(' ')[0].split(':').map(Number);
-    const [closeHour, closeMinute] = closeTime.split(' ')[0].split(':').map(Number);
-    
-    // Convert to 24-hour format
-    let startHour = openHour;
-    let endHour = closeHour;
-    
-    if (openTime.includes('PM') && startHour !== 12) startHour += 12;
-    if (openTime.includes('AM') && startHour === 12) startHour = 0;
-    if (closeTime.includes('PM') && endHour !== 12) endHour += 12;
-    if (closeTime.includes('AM') && endHour === 12) endHour = 0;
-    
-    // Create slots from opening time until closing time
-    let currentTime = new Date();
-    currentTime.setFullYear(new Date(date).getFullYear());
-    currentTime.setMonth(new Date(date).getMonth());
-    currentTime.setDate(new Date(date).getDate());
-    currentTime.setHours(startHour, openMinute, 0, 0);
-    
-    const endTime = new Date(currentTime);
-    endTime.setHours(endHour, closeMinute, 0, 0);
-    
-    while (currentTime < endTime) {
-      const slotStartTime = currentTime.toLocaleTimeString('en-IE', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-      });
-      
-      // Calculate slot end time based on service duration
-      const slotEndTime = new Date(currentTime.getTime() + (service.duration * 60000));
-      
-      // Check if this slot overlaps with any existing bookings
-      const isOverlapping = dateBookings.some(booking => {
-        if (booking.staffId !== staff.id) return false;
-        
-        // Create date objects for booking times
-        const [bookingHour, bookingMinute] = booking.startTime.split(':').map(Number);
-        const bookingStart = new Date(currentTime.getFullYear(), currentTime.getMonth(), currentTime.getDate(), bookingHour, bookingMinute, 0, 0);
-        const bookingEnd = new Date(bookingStart.getTime() + (booking.duration * 60000));
-        
-        // Check for overlap
-        return (
-          (currentTime >= bookingStart && currentTime < bookingEnd) ||
-          (slotEndTime > bookingStart && slotEndTime <= bookingEnd) ||
-          (currentTime <= bookingStart && slotEndTime >= bookingEnd)
-        );
-      });
-      
-      // Check if the slot would extend past closing time
-      const wouldExtendPastClosing = slotEndTime > endTime;
-      
-      if (!isOverlapping && !wouldExtendPastClosing) {
-        availableSlots.push({
-          staffName: staff.name,
-          startTime: slotStartTime,
-          endTime: slotEndTime.toLocaleTimeString('en-IE', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false 
-          })
-        });
-      }
-      
-      currentTime.setMinutes(currentTime.getMinutes() + 30);
-    }
-  });
-  
-  return availableSlots;
-}
-
 export async function loadDummyDataToFirestore() {
   try {
-    const businesses = await getAllBusinesses();
+    const businesses = dummyBusinesses;
     const batch = writeBatch(db);
     
     for (const business of businesses) {
