@@ -1,6 +1,6 @@
 import { Business } from '../types/business';
 import { db } from '../firebase-config';
-import { collection, doc, writeBatch } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs } from 'firebase/firestore';
 
 interface StaffMember {
   id: string;
@@ -865,7 +865,43 @@ export async function loadDummyDataToFirestore() {
     const businesses = dummyBusinesses;
     const batch = writeBatch(db);
     
+    // First, delete all existing businesses and their subcollections
+    const businessesRef = collection(db, 'businesses');
+    const existingBusinesses = await getDocs(businessesRef);
+    
+    for (const doc of existingBusinesses.docs) {
+      // Delete all subcollections
+      const staffRef = collection(doc.ref, 'staff');
+      const servicesRef = collection(doc.ref, 'services');
+      const bookingsRef = collection(doc.ref, 'bookings');
+      
+      const [staffDocs, servicesDocs, bookingsDocs] = await Promise.all([
+        getDocs(staffRef),
+        getDocs(servicesRef),
+        getDocs(bookingsRef)
+      ]);
+      
+      // Delete all documents in subcollections
+      staffDocs.docs.forEach(doc => batch.delete(doc.ref));
+      servicesDocs.docs.forEach(doc => batch.delete(doc.ref));
+      bookingsDocs.docs.forEach(doc => batch.delete(doc.ref));
+      
+      // Delete the business document
+      batch.delete(doc.ref);
+    }
+    
+    // Commit the deletions
+    await batch.commit();
+    
+    // Start a new batch for adding data
+    const newBatch = writeBatch(db);
+    
     for (const business of businesses) {
+      if (!business.id) {
+        console.error('Business missing ID:', business.name);
+        continue;
+      }
+      
       // Create business document
       const businessRef = doc(collection(db, 'businesses'), business.id);
       
@@ -884,12 +920,16 @@ export async function loadDummyDataToFirestore() {
       };
       
       // Set business document
-      batch.set(businessRef, businessData);
+      newBatch.set(businessRef, businessData);
       
       // Create staff subcollection
       for (const staff of business.staff) {
+        if (!staff.id) {
+          console.error('Staff missing ID:', staff.name);
+          continue;
+        }
         const staffRef = doc(collection(businessRef, 'staff'), staff.id);
-        batch.set(staffRef, {
+        newBatch.set(staffRef, {
           id: staff.id,
           name: staff.name,
           role: staff.role,
@@ -901,8 +941,12 @@ export async function loadDummyDataToFirestore() {
       
       // Create services subcollection
       for (const service of business.services) {
+        if (!service.id) {
+          console.error('Service missing ID:', service.name);
+          continue;
+        }
         const serviceRef = doc(collection(businessRef, 'services'), service.id);
-        batch.set(serviceRef, {
+        newBatch.set(serviceRef, {
           id: service.id,
           name: service.name,
           price: service.price,
@@ -914,8 +958,12 @@ export async function loadDummyDataToFirestore() {
       
       // Create bookings subcollection
       for (const booking of business.bookings) {
+        if (!booking.id) {
+          console.error('Booking missing ID for business:', business.name);
+          continue;
+        }
         const bookingRef = doc(collection(businessRef, 'bookings'), booking.id);
-        batch.set(bookingRef, {
+        newBatch.set(bookingRef, {
           id: booking.id,
           staffId: booking.staffId,
           serviceId: booking.serviceId,
@@ -927,7 +975,7 @@ export async function loadDummyDataToFirestore() {
     }
     
     // Commit all writes
-    await batch.commit();
+    await newBatch.commit();
     return { success: true, message: 'Successfully loaded dummy data to Firestore' };
   } catch (error) {
     console.error('Error loading dummy data to Firestore:', error);

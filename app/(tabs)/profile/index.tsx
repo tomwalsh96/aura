@@ -86,7 +86,7 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleLoadDummyData = async () => {
+  const handleResetBusinessData = async () => {
     try {
       setIsLoadingData(true);
       setError(null);
@@ -96,10 +96,10 @@ export default function ProfileScreen() {
       }
       
       await loadDummyDataToFirestore();
-      alert('Successfully loaded dummy data to Firestore');
+      alert('Successfully reset business data');
     } catch (error: any) {
-      console.error('Error loading dummy data:', error);
-      setError(error.message || 'Failed to load dummy data. Please try again.');
+      console.error('Error resetting business data:', error);
+      setError(error.message || 'Failed to reset business data. Please try again.');
     } finally {
       setIsLoadingData(false);
     }
@@ -139,12 +139,12 @@ export default function ProfileScreen() {
 
         <TouchableOpacity 
           style={[styles.menuItem, isLoadingData && styles.menuItemDisabled]}
-          onPress={handleLoadDummyData}
+          onPress={handleResetBusinessData}
           disabled={isLoadingData}
         >
-          <Ionicons name="cloud-upload-outline" size={24} color="#222222" />
+          <Ionicons name="refresh-outline" size={24} color="#222222" />
           <Text style={styles.menuItemText}>
-            {isLoadingData ? 'Loading Data...' : 'Load Dummy Data'}
+            {isLoadingData ? 'Resetting Data...' : 'Reset Business Data'}
           </Text>
           {isLoadingData ? (
             <ActivityIndicator size="small" color="#222222" />
