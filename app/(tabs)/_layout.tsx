@@ -22,18 +22,9 @@ export default function TabLayout() {
         <Tabs.Screen
           name="index"
           options={{
-            title: 'Home',
+            title: 'Explore',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="home-outline" size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="chat-v2/index"
-          options={{
-            title: 'Chat V2',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="chatbubbles-outline" size={size} color={color} />
+              <Ionicons name="compass-outline" size={size} color={color} />
             ),
           }}
         />
