@@ -29,15 +29,6 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
-          name="chat/index"
-          options={{
-            title: 'Chat',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="chatbubble-outline" size={size} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
           name="chat-v2/index"
           options={{
             title: 'Chat V2',
