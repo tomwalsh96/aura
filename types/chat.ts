@@ -5,5 +5,6 @@ export interface ChatMessage {
     id: string;
     role: 'user' | 'model' | 'assistant';
     content: string;
+    audioUri?: string;
     timestamp: number;
   }

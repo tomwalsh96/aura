@@ -408,7 +408,7 @@ export class AIService {
         userInput = message;
       }
 
-      this.addMessage('user', isAudio ? '[Audio Message]' : message);
+      this.addMessage('user', isAudio ? '[Audio Message]' : message, isAudio ? message : undefined);
       console.log('Added user message to history');
 
       this.chat = this.model.startChat({
@@ -619,13 +619,15 @@ export class AIService {
    * Creates a chat message object
    * @param role - The role of the message sender
    * @param content - The message content
+   * @param audioUri - Optional: The URI of the audio file
    * @returns A ChatMessage object
    */
-  createMessage(role: 'user' | 'model', content: string): ChatMessage {
+  createMessage(role: 'user' | 'model', content: string, audioUri?: string): ChatMessage {
     return {
       id: Date.now().toString(),
       role,
       content,
+      audioUri: role === 'user' && audioUri ? audioUri : undefined,
       timestamp: Date.now(),
     };
   }
@@ -634,9 +636,10 @@ export class AIService {
    * Adds a message to the chat history
    * @param role - The role of the message sender
    * @param content - The message content
+   * @param audioUri - Optional: The URI of the audio file
    */
-  addMessage(role: 'user' | 'model', content: string) {
-    const message = this.createMessage(role, content);
+  addMessage(role: 'user' | 'model', content: string, audioUri?: string) {
+    const message = this.createMessage(role, content, audioUri);
     this.history.push(message);
   }
 

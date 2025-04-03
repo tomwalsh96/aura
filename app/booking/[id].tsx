@@ -174,6 +174,26 @@ const useTimeSlots = (selectedStaff: StaffMember | null, selectedService: Servic
     });
   };
 
+  const isTimeSlotInFuture = (slot: TimeSlot, date: Date): boolean => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const selectedDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    
+    // If the selected date is in the future, all slots are valid
+    if (selectedDay > today) {
+      return true;
+    }
+    
+    // If the selected date is today, check if the slot is in the future
+    if (selectedDay.getTime() === today.getTime()) {
+      const [hours, minutes] = slot.startTime.split(':').map(Number);
+      const slotTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes);
+      return slotTime > now;
+    }
+    
+    return false;
+  };
+
   const generateTimeSlots = (staff: StaffMember, service: Service): TimeSlot[] => {
     const slots: TimeSlot[] = [];
     const startHour = 9; // 9 AM
@@ -194,11 +214,11 @@ const useTimeSlots = (selectedStaff: StaffMember | null, selectedService: Servic
         endTime: `${hour.toString().padStart(2, '0')}:${30 + service.duration}`
       };
 
-      // Only add slots that are available
-      if (isTimeSlotAvailable(slot00, selectedDateStr)) {
+      // Only add slots that are available and in the future
+      if (isTimeSlotAvailable(slot00, selectedDateStr) && isTimeSlotInFuture(slot00, selectedDate)) {
         slots.push(slot00);
       }
-      if (isTimeSlotAvailable(slot30, selectedDateStr)) {
+      if (isTimeSlotAvailable(slot30, selectedDateStr) && isTimeSlotInFuture(slot30, selectedDate)) {
         slots.push(slot30);
       }
     }

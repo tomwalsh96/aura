@@ -1,5 +1,5 @@
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, Alert, Animated, PanResponder } from 'react-native';
-import { useState, useRef, useEffect } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { AIService } from '@/services/aiService';
 import { Audio } from 'expo-av';
@@ -10,12 +10,14 @@ import { LocationService } from "@/services/locationService";
 import PaymentModal from '@/components/ui/PaymentModal';
 import { useRouter } from 'expo-router';
 import { GOOGLE_AI_KEY } from '@env';
+import * as Speech from 'expo-speech';
 
 interface Message {
   id: string;
   text: string;
   sender: 'user' | 'ai' | 'system';
   duration?: number;
+  audioUri?: string;
 }
 
 export default function ChatScreen() {
@@ -43,6 +45,7 @@ export default function ChatScreen() {
   const [showTooltip, setShowTooltip] = useState(false);
   const tooltipTimeout = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -240,6 +243,7 @@ export default function ChatScreen() {
           text: "[Audio Message]",
           sender: "user",
           duration: duration,
+          audioUri: uri,
         };
 
         // Add AI loading message immediately
@@ -313,8 +317,12 @@ export default function ChatScreen() {
     setShowCancelUI(false);
     setPlaybackPosition({});
     setIsPlaying(null);
+    setSpeakingMessageId(null); // Reset speaking state
     
-    // Clean up any ongoing audio
+    // Stop any ongoing speech synthesis
+    Speech.stop();
+    
+    // Clean up any ongoing audio playback or recording
     try {
       if (recordingRef.current) {
         await recordingRef.current.stopAndUnloadAsync();
@@ -329,55 +337,82 @@ export default function ChatScreen() {
     }
   };
 
-  const handlePlayAudio = async (uri: string) => {
-    try {
-      // Stop any ongoing recording first
-      if (recordingRef.current) {
-        await recordingRef.current.stopAndUnloadAsync();
-        recordingRef.current = null;
-        setIsRecording(false);
-      }
+  const handlePlayAudio = async (audioIdentifier: string) => {
+    // Stop any text-to-speech first
+    Speech.stop();
+    setSpeakingMessageId(null);
 
-      // Stop current playback if any
+    if (isPlaying === audioIdentifier) {
+      // Pause current playback
+      await soundRef.current?.pauseAsync();
+      setIsPlaying(null);
+    } else {
+      // Stop previous playback if any
       if (soundRef.current) {
         await soundRef.current.unloadAsync();
         soundRef.current = null;
       }
 
-      // If trying to play the same audio that's already playing, stop it
-      if (isPlaying === uri) {
-        setIsPlaying(null);
-        return;
-      }
+      setIsPlaying(audioIdentifier); // Set playing state to current audio
+      setPlaybackPosition(prev => ({ ...prev, [audioIdentifier]: 0 })); // Reset position
 
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true }
-      );
-
-      soundRef.current = sound;
-      setIsPlaying(uri);
-
-      // Listen for playback status
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded) {
-          if (status.didJustFinish) {
-            setIsPlaying(null);
-            soundRef.current = null;
-            setPlaybackPosition(prev => ({ ...prev, [uri]: 0 }));
-          } else {
-            setPlaybackPosition(prev => ({ 
-              ...prev, 
-              [uri]: status.positionMillis ? status.positionMillis / 1000 : 0 
-            }));
+      try {
+        const { sound, status } = await Audio.Sound.createAsync(
+          { uri: audioIdentifier },
+          { shouldPlay: true },
+          (status) => {
+            if (status.isLoaded) {
+              setPlaybackPosition(prev => ({
+                ...prev,
+                [audioIdentifier]: status.positionMillis / 1000
+              }));
+              if (status.didJustFinish) {
+                setIsPlaying(null);
+                soundRef.current?.unloadAsync(); // Unload when finished
+                soundRef.current = null;
+              }
+            }
           }
+        );
+        soundRef.current = sound;
+      } catch (error) {
+        console.error('Error playing audio:', error);
+        Alert.alert('Error', 'Could not play audio file.');
+        setIsPlaying(null); // Reset playing state on error
+        if (soundRef.current) {
+          await soundRef.current.unloadAsync();
+          soundRef.current = null;
         }
-      });
-    } catch (error) {
-      console.error('Error playing audio:', error);
-      Alert.alert('Error', 'Failed to play audio message');
-      setIsPlaying(null);
+      }
+    }
+  };
+
+  const handleSpeakMessage = async (messageId: string, text: string) => {
+    // Stop any audio playback first
+    if (soundRef.current) {
+      await soundRef.current.stopAsync();
+      await soundRef.current.unloadAsync();
       soundRef.current = null;
+      setIsPlaying(null);
+    }
+
+    if (speakingMessageId === messageId) {
+      // If already speaking this message, stop it
+      Speech.stop();
+      setSpeakingMessageId(null);
+    } else {
+      // Stop any previous speech
+      Speech.stop();
+      // Speak the new message
+      Speech.speak(text, {
+        onDone: () => setSpeakingMessageId(null),
+        onError: (error) => {
+          console.error('Error speaking message:', error);
+          setSpeakingMessageId(null);
+          Alert.alert('Error', 'Could not read message aloud.');
+        },
+      });
+      setSpeakingMessageId(messageId);
     }
   };
 
@@ -462,10 +497,11 @@ export default function ChatScreen() {
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.sender === "user";
-    const isAudio = item.text.startsWith("[Audio Message]");
+    const isAudio = !!item.audioUri;
     const isProcessing = item.text === "Thinking...";
-    const isPlayingThis = isPlaying === item.text;
-    const currentPosition = playbackPosition[item.text] || 0;
+    const isPlayingThis = isPlaying === (item.audioUri || item.text);
+    const currentPosition = playbackPosition[item.audioUri || item.text] || 0;
+    const isSpeakingThis = speakingMessageId === item.id;
 
     return (
       <View key={item.id} style={[
@@ -477,7 +513,7 @@ export default function ChatScreen() {
           <View style={styles.audioMessageContainer}>
             <TouchableOpacity 
               style={styles.audioPlayButton}
-              onPress={() => handlePlayAudio(item.text)}
+              onPress={() => handlePlayAudio(item.audioUri || item.text)}
             >
               <Ionicons 
                 name={isPlayingThis ? "pause-circle" : "play-circle"} 
@@ -508,7 +544,9 @@ export default function ChatScreen() {
           </View>
         ) : (
           <View style={styles.textMessageContainer}>
-            {isProcessing ? (
+            {isUser ? (
+              <Text style={styles.userMessageText}>{item.text}</Text>
+            ) : isProcessing ? (
               <View style={[styles.processingContainer, { backgroundColor: '#F0F0F0' }]}>
                 <ActivityIndicator size="small" color="#007AFF" />
                 <Text style={styles.processingText}>
@@ -516,9 +554,23 @@ export default function ChatScreen() {
                 </Text>
               </View>
             ) : (
-              <Text style={[isUser ? styles.userMessageText : styles.aiMessageText, { flexWrap: 'wrap' }]}>
-                {item.text}
-              </Text>
+              <>
+                <View style={styles.aiMessageContentContainer}>
+                  <Text style={styles.aiMessageText}>
+                    {item.text}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.speakButton}
+                  onPress={() => handleSpeakMessage(item.id, item.text)}
+                >
+                  <Ionicons
+                    name={isSpeakingThis ? "stop-circle" : "volume-high"}
+                    size={18}
+                    color={"#FFFFFF"}
+                  />
+                </TouchableOpacity>
+              </>
             )}
           </View>
         )}
@@ -535,6 +587,8 @@ export default function ChatScreen() {
       if (tooltipTimeout.current) {
         clearTimeout(tooltipTimeout.current);
       }
+      // Stop any ongoing speech synthesis
+      Speech.stop();
     };
   }, []);
 
@@ -700,6 +754,9 @@ const styles = StyleSheet.create({
   aiMessage: {
     alignSelf: "flex-start",
     backgroundColor: "#F0F0F0",
+    position: 'relative',
+    padding: 0,
+    overflow: 'visible',
   },
   userMessageText: {
     fontSize: 16,
@@ -804,8 +861,7 @@ const styles = StyleSheet.create({
     borderRadius: 1,
   },
   textMessageContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    width: '100%',
   },
   processingContainer: {
     flexDirection: 'row',
@@ -861,5 +917,26 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '500',
+  },
+  aiMessageContentContainer: {
+    padding: 12,
+    paddingRight: 30,
+  },
+  speakButton: {
+    position: 'absolute',
+    top: -10,
+    right: -10,
+    zIndex: 1,
+    padding: 6,
+    borderRadius: 15,
+    backgroundColor: '#4A90E2',
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.22,
+    shadowRadius: 2.22,
+    elevation: 3,
   },
 }); 
