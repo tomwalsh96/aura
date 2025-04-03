@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Platform, Modal, TextInput, KeyboardAvoidingView } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { doc, onSnapshot, collection, query, where, getDocs, addDoc, writeBatch } from 'firebase/firestore';
+import { doc, onSnapshot, collection, writeBatch } from 'firebase/firestore';
 import { db, auth } from '../../firebase-config';
 import { Business } from '../../types/business';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -32,25 +32,36 @@ interface TimeSlot {
   endTime: string;
 }
 
-const BookingScreen = () => {
-  const { id } = useLocalSearchParams();
-  const router = useRouter();
-  const navigation = useNavigation();
+interface BookingData {
+  id: string;
+  businessId: string;
+  businessName: string;
+  businessAddress: string;
+  staffId: string;
+  staffName: string;
+  serviceId: string;
+  serviceName: string;
+  servicePrice: number;
+  serviceDuration: number;
+  userId: string;
+  userEmail: string | null;
+  date: string;
+  startTime: string;
+  duration: number;
+  status: string;
+  paymentStatus: string;
+  paymentDate: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const useBusinessData = (businessId: string) => {
   const [business, setBusiness] = useState<Business | null>(null);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Booking state
-  const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
-  const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([]);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [bookings, setBookings] = useState<any[]>([]);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -58,7 +69,7 @@ const BookingScreen = () => {
 
     // Set up real-time listener for business document
     const unsubscribeBusiness = onSnapshot(
-      doc(db, 'businesses', id as string),
+      doc(db, 'businesses', businessId),
       (doc) => {
         if (doc.exists()) {
           setBusiness({ id: doc.id, ...doc.data() } as Business);
@@ -76,7 +87,7 @@ const BookingScreen = () => {
 
     // Set up real-time listener for bookings subcollection
     const unsubscribeBookings = onSnapshot(
-      collection(db, 'businesses', id as string, 'bookings'),
+      collection(db, 'businesses', businessId, 'bookings'),
       (snapshot) => {
         const bookingsData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -91,7 +102,7 @@ const BookingScreen = () => {
 
     // Set up real-time listener for staff subcollection
     const unsubscribeStaff = onSnapshot(
-      collection(db, 'businesses', id as string, 'staff'),
+      collection(db, 'businesses', businessId, 'staff'),
       (snapshot) => {
         const staffData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -106,7 +117,7 @@ const BookingScreen = () => {
 
     // Set up real-time listener for services subcollection
     const unsubscribeServices = onSnapshot(
-      collection(db, 'businesses', id as string, 'services'),
+      collection(db, 'businesses', businessId, 'services'),
       (snapshot) => {
         const servicesData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -125,15 +136,13 @@ const BookingScreen = () => {
       unsubscribeServices();
       unsubscribeBookings();
     };
-  }, [id]);
+  }, [businessId]);
 
-  useEffect(() => {
-    if (selectedService && selectedStaff && selectedDate) {
-      // Generate time slots whenever bookings change
-      const slots = generateTimeSlots(selectedStaff, selectedService);
-      setAvailableTimeSlots(slots);
-    }
-  }, [selectedService, selectedStaff, selectedDate, bookings]);
+  return { business, staff, services, bookings, loading, error };
+};
+
+const useTimeSlots = (selectedStaff: StaffMember | null, selectedService: Service | null, selectedDate: Date, bookings: any[]) => {
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([]);
 
   const isTimeSlotAvailable = (slot: TimeSlot, date: string): boolean => {
     // Check if there are any existing bookings that overlap with this slot
@@ -197,6 +206,612 @@ const BookingScreen = () => {
     return slots;
   };
 
+  useEffect(() => {
+    if (selectedService && selectedStaff && selectedDate) {
+      // Generate time slots whenever bookings change
+      const slots = generateTimeSlots(selectedStaff, selectedService);
+      setAvailableTimeSlots(slots);
+    }
+  }, [selectedService, selectedStaff, selectedDate, bookings]);
+
+  return { availableTimeSlots, isTimeSlotAvailable };
+};
+
+const usePayment = (
+  selectedService: Service | null, 
+  selectedStaff: StaffMember | null, 
+  selectedTimeSlot: TimeSlot | null, 
+  selectedDate: Date,
+  businessId: string,
+  business: Business | null,
+  isTimeSlotAvailable: (slot: TimeSlot, date: string) => boolean
+) => {
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [cardholderName, setCardholderName] = useState('');
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const [cardNumberError, setCardNumberError] = useState('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  const handlePaymentSubmit = async () => {
+    if (!selectedService || !selectedStaff || !selectedTimeSlot || !auth.currentUser) {
+      Alert.alert('Error', 'Please fill in all payment details');
+      return;
+    }
+
+    // Validate payment details
+    if (!cardNumber || !expiryDate || !cvv || !cardholderName) {
+      Alert.alert('Error', 'Please fill in all payment details');
+      return;
+    }
+
+    // Basic card number validation (16 digits)
+    if (!/^\d{16}$/.test(cardNumber)) {
+      setCardNumberError('Please enter a valid 16-digit card number');
+      return;
+    }
+
+    // Basic expiry date validation (MM/YY format)
+    if (!/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(expiryDate)) {
+      Alert.alert('Error', 'Please enter a valid expiry date (MM/YY)');
+      return;
+    }
+
+    // Basic CVV validation (3 or 4 digits)
+    if (!/^\d{3,4}$/.test(cvv)) {
+      Alert.alert('Error', 'Please enter a valid CVV');
+      return;
+    }
+
+    try {
+      setProcessingPayment(true);
+
+      // Here you would typically integrate with a payment processor
+      // For now, we'll simulate a successful payment
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const selectedDateStr = selectedDate.toISOString().split('T')[0];
+      
+      // Check if the selected time slot is still available
+      if (!isTimeSlotAvailable(selectedTimeSlot, selectedDateStr)) {
+        Alert.alert('Error', 'This time slot is no longer available. Please select another time.');
+        return;
+      }
+
+      // Create a new booking ID that will be used in both locations
+      const bookingId = doc(collection(db, 'bookings')).id;
+
+      // Create the booking data object
+      const bookingData: BookingData = {
+        id: bookingId,
+        businessId: businessId,
+        businessName: business?.name || '',
+        businessAddress: business?.address || '',
+        staffId: selectedStaff.id,
+        staffName: selectedStaff.name,
+        serviceId: selectedService.id,
+        serviceName: selectedService.name,
+        servicePrice: selectedService.price,
+        serviceDuration: selectedService.duration,
+        userId: auth.currentUser.uid,
+        userEmail: auth.currentUser.email,
+        date: selectedDateStr,
+        startTime: selectedTimeSlot.startTime,
+        duration: selectedService.duration,
+        status: 'confirmed',
+        paymentStatus: 'paid',
+        paymentDate: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Use a batch write to ensure both writes succeed or both fail
+      const batch = writeBatch(db);
+
+      // Add to business's bookings collection
+      const businessBookingRef = doc(db, 'businesses', businessId, 'bookings', bookingId);
+      batch.set(businessBookingRef, bookingData);
+
+      // Add to user's bookings collection
+      const userBookingRef = doc(db, 'users', auth.currentUser.uid, 'bookings', bookingId);
+      batch.set(userBookingRef, bookingData);
+
+      // Commit the batch
+      await batch.commit();
+
+      setShowPaymentModal(false);
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      Alert.alert('Error', 'Failed to process payment. Please try again.');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  return {
+    cardNumber,
+    setCardNumber,
+    expiryDate,
+    setExpiryDate,
+    cvv,
+    setCvv,
+    cardholderName,
+    setCardholderName,
+    processingPayment,
+    cardNumberError,
+    setCardNumberError,
+    showPaymentModal,
+    setShowPaymentModal,
+    showSuccessModal,
+    setShowSuccessModal,
+    handlePaymentSubmit
+  };
+};
+
+const LoadingView = () => (
+  <View style={styles.loadingContainer}>
+    <ActivityIndicator size="large" color="#4A90E2" />
+    <Text style={styles.loadingText}>Loading booking details...</Text>
+  </View>
+);
+
+const ErrorView = ({ error }: { error: string }) => (
+  <View style={styles.errorContainer}>
+    <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
+    <Text style={styles.errorText}>{error || 'Business not found'}</Text>
+  </View>
+);
+
+const ServiceSelection = ({ 
+  services, 
+  selectedService, 
+  onServiceSelect 
+}: { 
+  services: Service[], 
+  selectedService: Service | null, 
+  onServiceSelect: (service: Service) => void 
+}) => (
+  <View style={styles.section}>
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionNumber}>
+        <Text style={styles.sectionNumberText}>1</Text>
+      </View>
+      <Text style={styles.sectionTitle}>Select Service</Text>
+    </View>
+    <View style={styles.scrollContainer}>
+      <LinearGradient
+        colors={['rgba(255,255,255,1)', 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.fadeRight}
+      />
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false} 
+        style={styles.servicesContainer}
+        contentContainerStyle={styles.servicesContentContainer}
+      >
+        {services.map((service) => (
+          <TouchableOpacity
+            key={service.id}
+            style={[
+              styles.serviceCard,
+              selectedService?.id === service.id && styles.selectedCard
+            ]}
+            onPress={() => onServiceSelect(service)}
+          >
+            <Text style={styles.serviceName}>{service.name}</Text>
+            <Text style={styles.servicePrice}>€{service.price}</Text>
+            <Text style={styles.serviceDuration}>{service.duration} minutes</Text>
+            <Text style={styles.serviceDescription}>{service.description}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      <LinearGradient
+        colors={['rgba(255,255,255,0)', 'rgba(255,255,255,1)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.fadeLeft}
+      />
+    </View>
+  </View>
+);
+
+const StaffSelection = ({ 
+  staff, 
+  selectedService, 
+  selectedStaff, 
+  onStaffSelect 
+}: { 
+  staff: StaffMember[], 
+  selectedService: Service | null, 
+  selectedStaff: StaffMember | null, 
+  onStaffSelect: (staff: StaffMember) => void 
+}) => (
+  <View style={styles.section}>
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionNumber}>
+        <Text style={styles.sectionNumberText}>2</Text>
+      </View>
+      <Text style={styles.sectionTitle}>Select Staff Member</Text>
+    </View>
+    <View style={styles.scrollContainer}>
+      <LinearGradient
+        colors={['rgba(255,255,255,1)', 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.fadeRight}
+      />
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false} 
+        style={styles.staffContainer}
+        contentContainerStyle={styles.staffContentContainer}
+      >
+        {staff
+          .filter(member => selectedService?.staffIds.includes(member.id))
+          .map((member) => (
+            <TouchableOpacity
+              key={member.id}
+              style={[
+                styles.staffCard,
+                selectedStaff?.id === member.id && styles.selectedCard
+              ]}
+              onPress={() => onStaffSelect(member)}
+            >
+              <Text style={styles.staffName}>{member.name}</Text>
+              <Text style={styles.staffRole}>{member.role}</Text>
+            </TouchableOpacity>
+          ))}
+      </ScrollView>
+      <LinearGradient
+        colors={['rgba(255,255,255,0)', 'rgba(255,255,255,1)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.fadeLeft}
+      />
+    </View>
+  </View>
+);
+
+const DateTimeSelection = ({ 
+  selectedDate, 
+  onDateChange, 
+  showDatePicker, 
+  setShowDatePicker, 
+  availableTimeSlots, 
+  selectedTimeSlot, 
+  onTimeSlotSelect 
+}: { 
+  selectedDate: Date, 
+  onDateChange: (event: any, date?: Date) => void, 
+  showDatePicker: boolean, 
+  setShowDatePicker: (show: boolean) => void, 
+  availableTimeSlots: TimeSlot[], 
+  selectedTimeSlot: TimeSlot | null, 
+  onTimeSlotSelect: (slot: TimeSlot) => void 
+}) => (
+  <View style={styles.section}>
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionNumber}>
+        <Text style={styles.sectionNumberText}>3</Text>
+      </View>
+      <Text style={styles.sectionTitle}>Select Date & Time</Text>
+    </View>
+    <View style={styles.dateTimeContainer}>
+      {Platform.OS === 'ios' ? (
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display="spinner"
+          onChange={onDateChange}
+          minimumDate={new Date()}
+        />
+      ) : (
+        <>
+          <TouchableOpacity
+            style={styles.dateButton}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Text style={styles.dateButtonText}>
+              {selectedDate.toLocaleDateString('en-IE', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </Text>
+          </TouchableOpacity>
+          {showDatePicker && (
+            <DateTimePicker
+              value={selectedDate}
+              mode="date"
+              display="default"
+              onChange={onDateChange}
+              minimumDate={new Date()}
+            />
+          )}
+        </>
+      )}
+      {selectedDate && (
+        <View style={styles.timeSlotsGrid}>
+          {availableTimeSlots.map((slot, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.timeSlot,
+                selectedTimeSlot?.startTime === slot.startTime && styles.selectedTimeSlot
+              ]}
+              onPress={() => onTimeSlotSelect(slot)}
+            >
+              <Text style={[
+                styles.timeSlotText,
+                selectedTimeSlot?.startTime === slot.startTime && styles.selectedTimeSlotText
+              ]}>
+                {slot.startTime}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+    </View>
+  </View>
+);
+
+const PaymentModal = ({
+  visible,
+  onClose,
+  selectedService,
+  selectedDate,
+  selectedTimeSlot,
+  cardNumber,
+  setCardNumber,
+  expiryDate,
+  setExpiryDate,
+  cvv,
+  setCvv,
+  cardholderName,
+  setCardholderName,
+  processingPayment,
+  cardNumberError,
+  setCardNumberError,
+  onSubmit
+}: {
+  visible: boolean,
+  onClose: () => void,
+  selectedService: Service | null,
+  selectedDate: Date,
+  selectedTimeSlot: TimeSlot | null,
+  cardNumber: string,
+  setCardNumber: (value: string) => void,
+  expiryDate: string,
+  setExpiryDate: (value: string) => void,
+  cvv: string,
+  setCvv: (value: string) => void,
+  cardholderName: string,
+  setCardholderName: (value: string) => void,
+  processingPayment: boolean,
+  cardNumberError: string,
+  setCardNumberError: (value: string) => void,
+  onSubmit: () => void
+}) => (
+  <Modal
+    visible={visible}
+    transparent
+    animationType="slide"
+    onRequestClose={onClose}
+  >
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.modalContainer}
+    >
+      <View style={styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Payment Details</Text>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeButton}
+          >
+            <Ionicons name="close" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView style={styles.modalBody}>
+          <View style={styles.paymentSummary}>
+            <Text style={styles.paymentSummaryTitle}>Booking Summary</Text>
+            <Text style={styles.paymentSummaryText}>
+              {selectedService?.name} - €{selectedService?.price}
+            </Text>
+            <Text style={styles.paymentSummaryText}>
+              {selectedDate.toLocaleDateString('en-IE', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </Text>
+            <Text style={styles.paymentSummaryText}>{selectedTimeSlot?.startTime}</Text>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Card Number</Text>
+            <TextInput
+              style={[styles.input, cardNumberError ? styles.inputError : null]}
+              placeholder="1234567890123456"
+              value={cardNumber}
+              onChangeText={(text) => {
+                setCardNumber(text);
+                setCardNumberError('');
+              }}
+              keyboardType="numeric"
+              maxLength={16}
+            />
+            {cardNumberError ? <Text style={styles.errorText}>{cardNumberError}</Text> : null}
+          </View>
+
+          <View style={styles.row}>
+            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+              <Text style={styles.inputLabel}>Expiry Date</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="MM/YY"
+                value={expiryDate}
+                onChangeText={setExpiryDate}
+                maxLength={5}
+              />
+            </View>
+            <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.inputLabel}>CVV</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="123"
+                value={cvv}
+                onChangeText={setCvv}
+                keyboardType="numeric"
+                maxLength={4}
+                secureTextEntry
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Cardholder Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="John Doe"
+              value={cardholderName}
+              onChangeText={setCardholderName}
+              autoCapitalize="words"
+            />
+          </View>
+        </ScrollView>
+
+        <View style={styles.modalFooter}>
+          <TouchableOpacity
+            style={[styles.payButton, processingPayment && styles.payButtonDisabled]}
+            onPress={onSubmit}
+            disabled={processingPayment}
+          >
+            {processingPayment ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="card-outline" size={20} color="#fff" />
+                <Text style={styles.payButtonText}>
+                  Pay €{selectedService?.price}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  </Modal>
+);
+
+const SuccessModal = ({
+  visible,
+  onClose,
+  selectedService,
+  selectedStaff,
+  selectedDate,
+  selectedTimeSlot
+}: {
+  visible: boolean,
+  onClose: () => void,
+  selectedService: Service | null,
+  selectedStaff: StaffMember | null,
+  selectedDate: Date,
+  selectedTimeSlot: TimeSlot | null
+}) => (
+  <Modal
+    visible={visible}
+    transparent
+    animationType="fade"
+    onRequestClose={onClose}
+  >
+    <View style={styles.modalOverlay}>
+      <View style={styles.successModal}>
+        <View style={styles.successIconContainer}>
+          <Ionicons name="checkmark-circle" size={64} color="#4A90E2" />
+        </View>
+        <Text style={styles.successTitle}>Booking Confirmed!</Text>
+        <View style={styles.successDetails}>
+          <Text style={styles.successDetailText}>
+            <Text style={styles.successDetailLabel}>Service:</Text> {selectedService?.name}
+          </Text>
+          <Text style={styles.successDetailText}>
+            <Text style={styles.successDetailLabel}>Staff:</Text> {selectedStaff?.name}
+          </Text>
+          <Text style={styles.successDetailText}>
+            <Text style={styles.successDetailLabel}>Date:</Text> {selectedDate.toLocaleDateString('en-IE', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </Text>
+          <Text style={styles.successDetailText}>
+            <Text style={styles.successDetailLabel}>Time:</Text> {selectedTimeSlot?.startTime}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.successButton}
+          onPress={onClose}
+        >
+          <Text style={styles.successButtonText}>Done</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+);
+
+const BookingScreen = () => {
+  const { id } = useLocalSearchParams();
+  const router = useRouter();
+  const navigation = useNavigation();
+  
+  // Booking state
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  // Custom hooks
+  const { business, staff, services, bookings, loading, error } = useBusinessData(id as string);
+  const { availableTimeSlots, isTimeSlotAvailable } = useTimeSlots(selectedStaff, selectedService, selectedDate, bookings);
+  const {
+    cardNumber,
+    setCardNumber,
+    expiryDate,
+    setExpiryDate,
+    cvv,
+    setCvv,
+    cardholderName,
+    setCardholderName,
+    processingPayment,
+    cardNumberError,
+    setCardNumberError,
+    showPaymentModal,
+    setShowPaymentModal,
+    showSuccessModal,
+    setShowSuccessModal,
+    handlePaymentSubmit
+  } = usePayment(
+    selectedService,
+    selectedStaff,
+    selectedTimeSlot,
+    selectedDate,
+    id as string,
+    business,
+    isTimeSlotAvailable
+  );
+
+  // Event handlers
   const handleServiceSelect = (service: Service) => {
     setSelectedService(service);
     // Reset staff selection when service changes
@@ -220,84 +835,17 @@ const BookingScreen = () => {
     setSelectedTimeSlot(slot);
   };
 
-  const handleBooking = async () => {
-    if (!selectedService || !selectedStaff || !selectedTimeSlot || !auth.currentUser) {
-      Alert.alert('Error', 'Please select a service, staff member, and time slot');
-      return;
-    }
-
-    try {
-      const selectedDateStr = selectedDate.toISOString().split('T')[0];
-      
-      // Check if the selected time slot is still available
-      if (!isTimeSlotAvailable(selectedTimeSlot, selectedDateStr)) {
-        Alert.alert('Error', 'This time slot is no longer available. Please select another time.');
-        return;
-      }
-
-      // Create a new booking ID that will be used in both locations
-      const bookingId = doc(collection(db, 'bookings')).id;
-
-      // Create the booking data object
-      const bookingData = {
-        id: bookingId,
-        businessId: id,
-        businessName: business?.name || '',
-        businessAddress: business?.address || '',
-        staffId: selectedStaff.id,
-        staffName: selectedStaff.name,
-        serviceId: selectedService.id,
-        serviceName: selectedService.name,
-        servicePrice: selectedService.price,
-        serviceDuration: selectedService.duration,
-        userId: auth.currentUser.uid,
-        userEmail: auth.currentUser.email,
-        date: selectedDateStr,
-        startTime: selectedTimeSlot.startTime,
-        duration: selectedService.duration,
-        status: 'confirmed',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      // Use a batch write to ensure both writes succeed or both fail
-      const batch = writeBatch(db);
-
-      // Add to business's bookings collection
-      const businessBookingRef = doc(db, 'businesses', id as string, 'bookings', bookingId);
-      batch.set(businessBookingRef, bookingData);
-
-      // Add to user's bookings collection
-      const userBookingRef = doc(db, 'users', auth.currentUser.uid, 'bookings', bookingId);
-      batch.set(userBookingRef, bookingData);
-
-      // Commit the batch
-      await batch.commit();
-
-      // Show success modal
-      setShowSuccessModal(true);
-    } catch (error) {
-      console.error('Error creating booking:', error);
-      Alert.alert('Error', 'Failed to create booking. Please try again.');
-    }
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    navigation.goBack();
   };
 
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4A90E2" />
-        <Text style={styles.loadingText}>Loading booking details...</Text>
-      </View>
-    );
+    return <LoadingView />;
   }
 
   if (error || !business) {
-    return (
-      <View style={styles.errorContainer}>
-        <Ionicons name="alert-circle-outline" size={48} color="#FF3B30" />
-        <Text style={styles.errorText}>{error || 'Business not found'}</Text>
-      </View>
-    );
+    return <ErrorView error={error || 'Business not found'} />;
   }
 
   return (
@@ -319,164 +867,31 @@ const BookingScreen = () => {
             <Text style={styles.businessAddress}>{business?.address}</Text>
           </View>
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionNumber}>
-                <Text style={styles.sectionNumberText}>1</Text>
-              </View>
-              <Text style={styles.sectionTitle}>Select Service</Text>
-            </View>
-            <View style={styles.scrollContainer}>
-              <LinearGradient
-                colors={['rgba(255,255,255,1)', 'rgba(255,255,255,0)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.fadeRight}
-              />
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                style={styles.servicesContainer}
-                contentContainerStyle={styles.servicesContentContainer}
-              >
-                {services.map((service) => (
-                  <TouchableOpacity
-                    key={service.id}
-                    style={[
-                      styles.serviceCard,
-                      selectedService?.id === service.id && styles.selectedCard
-                    ]}
-                    onPress={() => handleServiceSelect(service)}
-                  >
-                    <Text style={styles.serviceName}>{service.name}</Text>
-                    <Text style={styles.servicePrice}>€{service.price}</Text>
-                    <Text style={styles.serviceDuration}>{service.duration} minutes</Text>
-                    <Text style={styles.serviceDescription}>{service.description}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <LinearGradient
-                colors={['rgba(255,255,255,0)', 'rgba(255,255,255,1)']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.fadeLeft}
-              />
-            </View>
-          </View>
+          <ServiceSelection 
+            services={services} 
+            selectedService={selectedService} 
+            onServiceSelect={handleServiceSelect} 
+          />
 
           {selectedService && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionNumber}>
-                  <Text style={styles.sectionNumberText}>2</Text>
-                </View>
-                <Text style={styles.sectionTitle}>Select Staff Member</Text>
-              </View>
-              <View style={styles.scrollContainer}>
-                <LinearGradient
-                  colors={['rgba(255,255,255,1)', 'rgba(255,255,255,0)']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.fadeRight}
-                />
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false} 
-                  style={styles.staffContainer}
-                  contentContainerStyle={styles.staffContentContainer}
-                >
-                  {staff
-                    .filter(member => selectedService.staffIds.includes(member.id))
-                    .map((member) => (
-                      <TouchableOpacity
-                        key={member.id}
-                        style={[
-                          styles.staffCard,
-                          selectedStaff?.id === member.id && styles.selectedCard
-                        ]}
-                        onPress={() => handleStaffSelect(member)}
-                      >
-                        <Text style={styles.staffName}>{member.name}</Text>
-                        <Text style={styles.staffRole}>{member.role}</Text>
-                      </TouchableOpacity>
-                    ))}
-                </ScrollView>
-                <LinearGradient
-                  colors={['rgba(255,255,255,0)', 'rgba(255,255,255,1)']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.fadeLeft}
-                />
-              </View>
-            </View>
+            <StaffSelection 
+              staff={staff} 
+              selectedService={selectedService} 
+              selectedStaff={selectedStaff} 
+              onStaffSelect={handleStaffSelect} 
+            />
           )}
 
           {selectedStaff && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionNumber}>
-                  <Text style={styles.sectionNumberText}>3</Text>
-                </View>
-                <Text style={styles.sectionTitle}>Select Date & Time</Text>
-              </View>
-              <View style={styles.dateTimeContainer}>
-                {Platform.OS === 'ios' ? (
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="date"
-                    display="spinner"
-                    onChange={handleDateChange}
-                    minimumDate={new Date()}
-                  />
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      style={styles.dateButton}
-                      onPress={() => setShowDatePicker(true)}
-                    >
-                      <Text style={styles.dateButtonText}>
-                        {selectedDate.toLocaleDateString('en-IE', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}
-                      </Text>
-                    </TouchableOpacity>
-                    {showDatePicker && (
-                      <DateTimePicker
-                        value={selectedDate}
-                        mode="date"
-                        display="default"
-                        onChange={handleDateChange}
-                        minimumDate={new Date()}
-                      />
-                    )}
-                  </>
-                )}
-                {selectedDate && (
-                  <View style={styles.timeSlotsGrid}>
-                    {availableTimeSlots.map((slot, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[
-                          styles.timeSlot,
-                          selectedTimeSlot?.startTime === slot.startTime && styles.selectedTimeSlot
-                        ]}
-                        onPress={() => handleTimeSlotSelect(slot)}
-                      >
-                        <Text style={[
-                          styles.timeSlotText,
-                          selectedTimeSlot?.startTime === slot.startTime && styles.selectedTimeSlotText
-                        ]}>
-                          {slot.startTime}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            </View>
+            <DateTimeSelection 
+              selectedDate={selectedDate} 
+              onDateChange={handleDateChange} 
+              showDatePicker={showDatePicker} 
+              setShowDatePicker={setShowDatePicker} 
+              availableTimeSlots={availableTimeSlots} 
+              selectedTimeSlot={selectedTimeSlot} 
+              onTimeSlotSelect={handleTimeSlotSelect} 
+            />
           )}
 
           <TouchableOpacity
@@ -484,7 +899,7 @@ const BookingScreen = () => {
               styles.bookButton,
               (!selectedService || !selectedStaff || !selectedTimeSlot) && styles.bookButtonDisabled
             ]}
-            onPress={handleBooking}
+            onPress={() => setShowPaymentModal(true)}
             disabled={!selectedService || !selectedStaff || !selectedTimeSlot}
           >
             <Text style={styles.bookButtonText}>Confirm Booking</Text>
@@ -492,52 +907,34 @@ const BookingScreen = () => {
         </View>
       </ScrollView>
 
-      <Modal
+      <PaymentModal
+        visible={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        selectedService={selectedService}
+        selectedDate={selectedDate}
+        selectedTimeSlot={selectedTimeSlot}
+        cardNumber={cardNumber}
+        setCardNumber={setCardNumber}
+        expiryDate={expiryDate}
+        setExpiryDate={setExpiryDate}
+        cvv={cvv}
+        setCvv={setCvv}
+        cardholderName={cardholderName}
+        setCardholderName={setCardholderName}
+        processingPayment={processingPayment}
+        cardNumberError={cardNumberError}
+        setCardNumberError={setCardNumberError}
+        onSubmit={handlePaymentSubmit}
+      />
+
+      <SuccessModal
         visible={showSuccessModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          setShowSuccessModal(false);
-          navigation.goBack();
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.successModal}>
-            <View style={styles.successIconContainer}>
-              <Ionicons name="checkmark-circle" size={64} color="#4A90E2" />
-            </View>
-            <Text style={styles.successTitle}>Booking Confirmed!</Text>
-            <View style={styles.successDetails}>
-              <Text style={styles.successDetailText}>
-                <Text style={styles.successDetailLabel}>Service:</Text> {selectedService?.name}
-              </Text>
-              <Text style={styles.successDetailText}>
-                <Text style={styles.successDetailLabel}>Staff:</Text> {selectedStaff?.name}
-              </Text>
-              <Text style={styles.successDetailText}>
-                <Text style={styles.successDetailLabel}>Date:</Text> {selectedDate.toLocaleDateString('en-IE', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </Text>
-              <Text style={styles.successDetailText}>
-                <Text style={styles.successDetailLabel}>Time:</Text> {selectedTimeSlot?.startTime}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.successButton}
-              onPress={() => {
-                setShowSuccessModal(false);
-                navigation.goBack();
-              }}
-            >
-              <Text style={styles.successButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={handleSuccessModalClose}
+        selectedService={selectedService}
+        selectedStaff={selectedStaff}
+        selectedDate={selectedDate}
+        selectedTimeSlot={selectedTimeSlot}
+      />
     </>
   );
 };
@@ -851,6 +1248,98 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    minHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  paymentSummary: {
+    backgroundColor: '#f8f8f8',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  paymentSummaryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  paymentSummaryText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#f8f8f8',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  modalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  payButton: {
+    backgroundColor: '#4A90E2',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  payButtonDisabled: {
+    opacity: 0.7,
+  },
+  payButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  inputError: {
+    borderColor: '#FF3B30',
+    borderWidth: 1,
   },
 });
 

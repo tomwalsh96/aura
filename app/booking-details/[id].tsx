@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { doc, getDoc, writeBatch, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../../firebase-config';
@@ -28,6 +28,14 @@ export default function BookingDetailsScreen() {
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentDetails, setPaymentDetails] = useState({
+    cardNumber: '',
+    expiryDate: '',
+    cvv: '',
+    cardholderName: ''
+  });
+  const [processingPayment, setProcessingPayment] = useState(false);
 
   useEffect(() => {
     if (!auth.currentUser) {
@@ -111,6 +119,72 @@ export default function BookingDetailsScreen() {
     return bookingDate < new Date();
   };
 
+  const handlePaymentSubmit = async () => {
+    if (!booking || !auth.currentUser) return;
+
+    // Validate payment details
+    if (!paymentDetails.cardNumber || !paymentDetails.expiryDate || !paymentDetails.cvv || !paymentDetails.cardholderName) {
+      Alert.alert('Error', 'Please fill in all payment details');
+      return;
+    }
+
+    // Basic card number validation (16 digits)
+    if (!/^\d{16}$/.test(paymentDetails.cardNumber.replace(/\s/g, ''))) {
+      Alert.alert('Error', 'Please enter a valid card number');
+      return;
+    }
+
+    // Basic expiry date validation (MM/YY format)
+    if (!/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(paymentDetails.expiryDate)) {
+      Alert.alert('Error', 'Please enter a valid expiry date (MM/YY)');
+      return;
+    }
+
+    // Basic CVV validation (3 or 4 digits)
+    if (!/^\d{3,4}$/.test(paymentDetails.cvv)) {
+      Alert.alert('Error', 'Please enter a valid CVV');
+      return;
+    }
+
+    try {
+      setProcessingPayment(true);
+
+      // Here you would typically integrate with a payment processor
+      // For now, we'll simulate a successful payment
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const batch = writeBatch(db);
+
+      // Update booking status to confirmed
+      const userBookingRef = doc(db, 'users', auth.currentUser.uid, 'bookings', booking.id);
+      const businessBookingRef = doc(db, 'businesses', booking.businessId, 'bookings', booking.id);
+
+      const bookingUpdate = {
+        status: 'confirmed',
+        paymentStatus: 'paid',
+        paymentDate: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      batch.update(userBookingRef, bookingUpdate);
+      batch.update(businessBookingRef, bookingUpdate);
+
+      await batch.commit();
+
+      setShowPaymentModal(false);
+      Alert.alert(
+        'Payment Successful',
+        'Your booking has been confirmed.',
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      Alert.alert('Error', 'Failed to process payment. Please try again.');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -178,6 +252,16 @@ export default function BookingDetailsScreen() {
             <Text style={styles.dateTime}>{booking.startTime}</Text>
           </View>
 
+          {booking.status === 'pending' && !isPastBooking() && (
+            <TouchableOpacity
+              style={styles.confirmButton}
+              onPress={() => setShowPaymentModal(true)}
+            >
+              <Ionicons name="card-outline" size={20} color="#fff" />
+              <Text style={styles.confirmButtonText}>Confirm & Pay</Text>
+            </TouchableOpacity>
+          )}
+
           {booking.status === 'confirmed' && !isPastBooking() && (
             <TouchableOpacity
               style={styles.cancelButton}
@@ -196,6 +280,115 @@ export default function BookingDetailsScreen() {
           )}
         </View>
       </View>
+
+      <Modal
+        visible={showPaymentModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowPaymentModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Payment Details</Text>
+              <TouchableOpacity
+                onPress={() => setShowPaymentModal(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.paymentSummary}>
+                <Text style={styles.paymentSummaryTitle}>Booking Summary</Text>
+                <Text style={styles.paymentSummaryText}>
+                  {booking?.serviceName} - €{booking?.servicePrice}
+                </Text>
+                <Text style={styles.paymentSummaryText}>
+                  {new Date(booking?.date || '').toLocaleDateString('en-IE', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </Text>
+                <Text style={styles.paymentSummaryText}>{booking?.startTime}</Text>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Card Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="1234 5678 9012 3456"
+                  value={paymentDetails.cardNumber}
+                  onChangeText={(text) => setPaymentDetails({ ...paymentDetails, cardNumber: text })}
+                  keyboardType="numeric"
+                  maxLength={19}
+                />
+              </View>
+
+              <View style={styles.row}>
+                <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
+                  <Text style={styles.inputLabel}>Expiry Date</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="MM/YY"
+                    value={paymentDetails.expiryDate}
+                    onChangeText={(text) => setPaymentDetails({ ...paymentDetails, expiryDate: text })}
+                    maxLength={5}
+                  />
+                </View>
+                <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+                  <Text style={styles.inputLabel}>CVV</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="123"
+                    value={paymentDetails.cvv}
+                    onChangeText={(text) => setPaymentDetails({ ...paymentDetails, cvv: text })}
+                    keyboardType="numeric"
+                    maxLength={4}
+                    secureTextEntry
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Cardholder Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="John Doe"
+                  value={paymentDetails.cardholderName}
+                  onChangeText={(text) => setPaymentDetails({ ...paymentDetails, cardholderName: text })}
+                  autoCapitalize="words"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={[styles.payButton, processingPayment && styles.payButtonDisabled]}
+                onPress={handlePaymentSubmit}
+                disabled={processingPayment}
+              >
+                {processingPayment ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <>
+                    <Ionicons name="card-outline" size={20} color="#fff" />
+                    <Text style={styles.payButtonText}>
+                      Pay €{booking?.servicePrice}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 }
@@ -297,6 +490,109 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmButton: {
+    backgroundColor: '#4A90E2',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    minHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#333',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  paymentSummary: {
+    backgroundColor: '#f8f8f8',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  paymentSummaryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  paymentSummaryText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: '#f8f8f8',
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 16,
+  },
+  row: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  modalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  payButton: {
+    backgroundColor: '#4A90E2',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  payButtonDisabled: {
+    opacity: 0.7,
+  },
+  payButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
