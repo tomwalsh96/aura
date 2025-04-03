@@ -721,6 +721,12 @@ export class AIService {
   ): Promise<{ staffName: string, startTime: string, endTime: string }[]> {
     try {
       console.log('Starting executeFindAvailableSlots with:', { businessName, serviceName, date, staffName });
+
+      // Get current date and time for comparison if needed
+      const now = new Date();
+      const todayStr = now.toISOString().split('T')[0];
+      const isToday = date === todayStr;
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
       
       // Find the business
       const businessesRef = collection(db, 'businesses');
@@ -845,12 +851,14 @@ export class AIService {
         });
         
         while (currentTime < endTime) {
-          const slotStartTime = currentTime.toLocaleTimeString('en-IE', { 
+          const slotStartTimeStr = currentTime.toLocaleTimeString('en-IE', { 
             hour: '2-digit', 
             minute: '2-digit',
             hour12: false 
           });
-          
+          const [slotHour, slotMinute] = slotStartTimeStr.split(':').map(Number);
+          const slotStartMinutes = slotHour * 60 + slotMinute;
+
           // Calculate slot end time based on service duration
           const slotEndTime = new Date(currentTime.getTime() + (service.duration * 60000));
           
@@ -873,11 +881,14 @@ export class AIService {
           
           // Check if the slot would extend past closing time
           const wouldExtendPastClosing = slotEndTime > endTime;
+
+          // Check if the slot is in the past for today
+          const isPast = isToday && (slotStartMinutes < currentMinutes);
           
-          if (!isOverlapping && !wouldExtendPastClosing) {
+          if (!isOverlapping && !wouldExtendPastClosing && !isPast) {
             availableSlots.push({
               staffName: staff.name,
-              startTime: slotStartTime,
+              startTime: slotStartTimeStr,
               endTime: slotEndTime.toLocaleTimeString('en-IE', { 
                 hour: '2-digit', 
                 minute: '2-digit',
@@ -886,11 +897,13 @@ export class AIService {
             });
           }
           
-          currentTime.setMinutes(currentTime.getMinutes() + 30);
+          // Increment time by 30 minutes (or maybe service duration? depends on booking rules)
+          // Using 30 min increments for now as per previous logic
+          currentTime.setMinutes(currentTime.getMinutes() + 30); 
         }
       }
       
-      console.log('Available slots:', availableSlots);
+      console.log('Available slots (filtered for past times):', availableSlots);
       return availableSlots;
     } catch (error) {
       console.error('Error in executeFindAvailableSlots:', error);

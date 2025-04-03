@@ -51,6 +51,8 @@ export default function AuthScreen() {
         style={styles.keyboardView}
       >
         <View style={styles.content}>
+          <Text style={styles.businessName}>Aura</Text>
+          
           <Text style={styles.title}>
             {isLogin ? 'Welcome Back' : 'Create Account'}
           </Text>
@@ -113,12 +115,19 @@ const styles = StyleSheet.create({
     padding: 20,
     justifyContent: 'center',
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 40,
+  businessName: {
+    fontSize: 48,
+    fontWeight: '500',
+    color: '#4A90E2',
     textAlign: 'center',
-    color: '#222222',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    marginBottom: 32,
+    textAlign: 'center',
+    color: '#333333',
   },
   form: {
     gap: 16,
