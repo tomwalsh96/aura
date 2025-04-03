@@ -3,10 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Keyboard
 import { Ionicons } from '@expo/vector-icons';
 import { AIService } from '@/services/aiService';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { LocationService } from "@/services/locationService";
 import PaymentModal from '@/components/ui/PaymentModal';
 import { useRouter } from 'expo-router';
 import { GOOGLE_AI_KEY } from '@env';
@@ -25,17 +23,13 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-  const [lastMessageTime, setLastMessageTime] = useState<number>(0);
   const flatListRef = useRef<FlatList>(null);
   const aiServiceRef = useRef<AIService | null>(null);
-  const locationService = useRef(LocationService.getInstance()).current;
   const recordingRef = useRef<Audio.Recording | null>(null);
   const [isPlaying, setIsPlaying] = useState<string | null>(null);
-  const [transcriptions, setTranscriptions] = useState<Record<string, string>>({});
   const soundRef = useRef<Audio.Sound | null>(null);
   const [isButtonDisabled, setIsButtonDisabled] = useState(false);
   const buttonDebounceTimeout = useRef<NodeJS.Timeout | null>(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [showCancelUI, setShowCancelUI] = useState(false);
   const cancelThreshold = 100; // pixels to slide before canceling
@@ -724,6 +718,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 16,
     paddingBottom: 16,
+    marginTop: -20,
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5EA",
     backgroundColor: "#fff",
