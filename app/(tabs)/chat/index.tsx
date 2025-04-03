@@ -177,6 +177,27 @@ export default function ChatScreen() {
       setMessages(prev => prev.filter(msg => msg.id !== loadingMessageId));
 
       if (response) {
+        // Check if the response contains a booking confirmation with payment status
+        if (response.includes("booking") && response.includes("not yet paid")) {
+          // Extract booking details from the response
+          const bookingMatch = response.match(/booking for (.*?) at (.*?) on (.*?) at (.*?)\. This booking is not yet paid/);
+          if (bookingMatch) {
+            const [_, serviceName, businessName, date, startTime] = bookingMatch;
+            
+            // Create a booking object
+            const booking = {
+              serviceName,
+              businessName,
+              date,
+              startTime,
+              isPaid: false // AI-created bookings are not paid
+            };
+            
+            // Handle the unpaid booking
+            handleUnpaidBooking(booking);
+          }
+        }
+        
         setMessages(prev => [...prev, {
           id: Date.now().toString(),
           text: response,
@@ -390,6 +411,26 @@ export default function ChatScreen() {
         sender: 'system'
       }]);
     }
+  };
+
+  const handleUnpaidBooking = (booking: any) => {
+    setMessages(prev => [...prev, {
+      id: Date.now().toString(),
+      text: `Your booking for ${booking.serviceName} at ${booking.businessName} on ${booking.date} at ${booking.startTime} has been created but is not yet paid. Please go to the My Bookings page to complete your payment.`,
+      sender: 'system'
+    }]);
+    
+    // Add a button to navigate to My Bookings
+    setMessages(prev => [...prev, {
+      id: (Date.now() + 1).toString(),
+      text: "Go to My Bookings",
+      sender: 'system'
+    }]);
+    
+    // Navigate to My Bookings after a short delay
+    setTimeout(() => {
+      router.push('/(tabs)/my-bookings');
+    }, 2000);
   };
 
   const handleMicPress = () => {

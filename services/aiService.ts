@@ -15,7 +15,8 @@ import {
   DocumentData,
   setDoc,
   serverTimestamp,
-  updateDoc
+  updateDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import * as FileSystem from 'expo-file-system';
@@ -465,10 +466,10 @@ export class AIService {
         if (functionResponseData) {
           switch (name) {
             case 'list_businesses':
-          const businesses = functionResponseData as any[];
+              const businesses = functionResponseData as any[];
               if (businesses.length > 0) {
-            formattedResponse = 'Here are the available businesses:\n\n';
-            businesses.forEach(business => {
+                formattedResponse = 'Here are the available businesses:\n\n';
+                businesses.forEach(business => {
                   formattedResponse += `• ${business.businessName} (${business.businessRating}★)\n`;
                   business.services.forEach((service: any) => {
                     formattedResponse += `  - ${service.serviceName}: €${service.servicePrice}\n`;
@@ -480,7 +481,7 @@ export class AIService {
                   formattedResponse += '\n';
                 });
                 formattedResponse += 'What would you like to book?';
-            } else {
+              } else {
                 formattedResponse = 'No businesses found matching your criteria. Please try a different search.';
               }
               break;
@@ -505,15 +506,16 @@ export class AIService {
                   formattedResponse += '\n';
                 });
                 formattedResponse += 'Please select a time slot to proceed with your booking.';
-            } else {
+              } else {
                 formattedResponse = `No available slots found for ${args.serviceName} at ${args.businessName} on ${args.date}. Would you like to try a different date?`;
               }
               break;
 
             case 'create_booking':
               if (functionResponseData && functionResponseData.id) {
-                formattedResponse = `Successfully created your booking for ${args.serviceName} at ${args.businessName} on ${args.date} at ${args.startTime}. Would you like to book anything else?`;
-          } else {
+                formattedResponse = functionResponseData.message || 
+                  `Successfully created your booking for ${args.serviceName} at ${args.businessName} on ${args.date} at ${args.startTime}. This booking is not yet paid. Please go to the My Bookings page to complete your payment.`;
+              } else {
                 formattedResponse = 'Sorry, I was unable to create your booking. Please try again or select a different time slot.';
               }
               break;
@@ -983,19 +985,29 @@ export class AIService {
 
       // Generate a proper UUID format using the uuid library
       const uuid = uuidv4();
+      const now = new Date().toISOString();
 
       // Create the minimal booking object with only required fields
       const businessBooking = {
         id: uuid,
         businessId: businessDoc.id,
+        businessName: business.name,
+        businessAddress: business.address,
         staffId: staffDoc.id,
+        staffName: staffData.name,
         serviceId: serviceDoc.id,
+        serviceName: service.name,
+        servicePrice: service.price,
+        serviceDuration: service.duration,
         userId: userId,
-        date,
-        startTime,
+        userEmail: auth.currentUser.email || '',
+        date: date,
+        startTime: startTime,
         duration: service.duration,
         status: 'confirmed',
-        createdAt: new Date().toISOString()
+        paymentStatus: 'unpaid',
+        createdAt: now,
+        updatedAt: now
       };
       
       // Create the booking document with the generated ID
@@ -1016,13 +1028,14 @@ export class AIService {
         servicePrice: service.price,
         serviceDuration: service.duration,
         userId: userId,
-        userEmail: auth.currentUser.email,
-        date,
-        startTime,
+        userEmail: auth.currentUser.email || '',
+        date: date,
+        startTime: startTime,
         duration: service.duration,
         status: 'confirmed',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        paymentStatus: 'unpaid',
+        createdAt: now,
+        updatedAt: now
       };
 
       // Create the booking in the user's bookings collection with the same ID
@@ -1031,7 +1044,10 @@ export class AIService {
       await setDoc(userBookingDocRef, userBooking);
       console.log('Created booking in user collection:', userBooking);
       
-      return businessBooking;
+      return {
+        ...businessBooking,
+        message: `Your booking for ${serviceName} at ${businessName} on ${date} at ${startTime} with ${staffName} has been confirmed. This booking is not yet paid. You can complete the payment in the My Bookings page.`
+      };
     } catch (error) {
       console.error('Error in executeCreateBooking:', error);
       return null;
@@ -1063,12 +1079,14 @@ export class AIService {
       await setDoc(businessBookingRef, {
         ...bookingData,
         status: 'confirmed',
+        isPaid: true,
         updatedAt: serverTimestamp()
       });
 
       // Update the booking in the user's collection
       await updateDoc(doc(userBookingsRef, bookingId), {
         status: 'confirmed',
+        isPaid: true,
         updatedAt: serverTimestamp()
       });
 

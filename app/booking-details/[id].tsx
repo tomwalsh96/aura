@@ -20,6 +20,9 @@ interface BookingDetails {
   startTime: string;
   status: string;
   createdAt: string;
+  isPaid: boolean;
+  paymentDate?: string;
+  updatedAt?: string;
 }
 
 export default function BookingDetailsScreen() {
@@ -29,6 +32,7 @@ export default function BookingDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [paymentDetails, setPaymentDetails] = useState({
     cardNumber: '',
     expiryDate: '',
@@ -65,6 +69,12 @@ export default function BookingDetailsScreen() {
 
     return () => unsubscribe();
   }, [id]);
+
+  useEffect(() => {
+    if (showSuccessModal) {
+      console.log('Success modal displayed for booking:', booking?.id);
+    }
+  }, [showSuccessModal, booking]);
 
   const handleCancelBooking = async () => {
     if (!booking || !auth.currentUser) return;
@@ -148,35 +158,48 @@ export default function BookingDetailsScreen() {
 
     try {
       setProcessingPayment(true);
+      console.log('Processing payment for booking:', booking.id);
 
       // Here you would typically integrate with a payment processor
       // For now, we'll simulate a successful payment
       await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('Payment processed successfully');
 
       const batch = writeBatch(db);
 
-      // Update booking status to confirmed
+      // Update booking status to confirmed and mark as paid
       const userBookingRef = doc(db, 'users', auth.currentUser.uid, 'bookings', booking.id);
       const businessBookingRef = doc(db, 'businesses', booking.businessId, 'bookings', booking.id);
 
       const bookingUpdate = {
         status: 'confirmed',
-        paymentStatus: 'paid',
+        isPaid: true,
         paymentDate: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
+      console.log('Updating booking with:', bookingUpdate);
+      
       batch.update(userBookingRef, bookingUpdate);
       batch.update(businessBookingRef, bookingUpdate);
 
       await batch.commit();
+      console.log('Booking updated successfully');
 
+      // Close payment modal and show success modal
       setShowPaymentModal(false);
-      Alert.alert(
-        'Payment Successful',
-        'Your booking has been confirmed.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      setShowSuccessModal(true);
+      
+      // Update local booking state to reflect payment
+      setBooking({
+        ...booking,
+        status: 'confirmed',
+        isPaid: true,
+        paymentDate: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      
+      console.log('Local booking state updated');
     } catch (error) {
       console.error('Error processing payment:', error);
       Alert.alert('Error', 'Failed to process payment. Please try again.');
@@ -218,6 +241,9 @@ export default function BookingDetailsScreen() {
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
               <Text style={styles.statusText}>{booking.status}</Text>
             </View>
+            <View style={[styles.statusBadge, { backgroundColor: booking.isPaid ? '#E8F5E9' : '#FFEBEE', marginLeft: 8 }]}>
+              <Text style={styles.statusText}>{booking.isPaid ? 'Paid' : 'Not Paid'}</Text>
+            </View>
           </View>
 
           <View style={styles.section}>
@@ -252,13 +278,12 @@ export default function BookingDetailsScreen() {
             <Text style={styles.dateTime}>{booking.startTime}</Text>
           </View>
 
-          {booking.status === 'pending' && !isPastBooking() && (
+          {!booking.isPaid && !isPastBooking() && (
             <TouchableOpacity
-              style={styles.confirmButton}
+              style={styles.payButton}
               onPress={() => setShowPaymentModal(true)}
             >
-              <Ionicons name="card-outline" size={20} color="#fff" />
-              <Text style={styles.confirmButtonText}>Confirm & Pay</Text>
+              <Text style={styles.payButtonText}>Pay Now</Text>
             </TouchableOpacity>
           )}
 
@@ -317,6 +342,12 @@ export default function BookingDetailsScreen() {
                   })}
                 </Text>
                 <Text style={styles.paymentSummaryText}>{booking?.startTime}</Text>
+                <View style={styles.paymentNote}>
+                  <Ionicons name="information-circle-outline" size={16} color="#4A90E2" />
+                  <Text style={styles.paymentNoteText}>
+                    Upon successful payment, your booking will be marked as paid and confirmed.
+                  </Text>
+                </View>
               </View>
 
               <View style={styles.inputContainer}>
@@ -325,9 +356,15 @@ export default function BookingDetailsScreen() {
                   style={styles.input}
                   placeholder="1234 5678 9012 3456"
                   value={paymentDetails.cardNumber}
-                  onChangeText={(text) => setPaymentDetails({ ...paymentDetails, cardNumber: text })}
+                  onChangeText={(text) => {
+                    // Remove any non-digit characters
+                    const cleanedText = text.replace(/\D/g, '');
+                    // Limit to 16 digits
+                    const limitedText = cleanedText.slice(0, 16);
+                    setPaymentDetails({ ...paymentDetails, cardNumber: limitedText });
+                  }}
                   keyboardType="numeric"
-                  maxLength={19}
+                  maxLength={16}
                 />
               </View>
 
@@ -388,6 +425,54 @@ export default function BookingDetailsScreen() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.successModal}>
+            <View style={styles.successIconContainer}>
+              <Ionicons name="checkmark-circle" size={64} color="#4A90E2" />
+            </View>
+            <Text style={styles.successTitle}>Payment Successful!</Text>
+            <View style={styles.successDetails}>
+              <Text style={styles.successDetailText}>
+                <Text style={styles.successDetailLabel}>Service:</Text> {booking?.serviceName}
+              </Text>
+              <Text style={styles.successDetailText}>
+                <Text style={styles.successDetailLabel}>Date:</Text> {new Date(booking?.date || '').toLocaleDateString('en-IE', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                })}
+              </Text>
+              <Text style={styles.successDetailText}>
+                <Text style={styles.successDetailLabel}>Time:</Text> {booking?.startTime}
+              </Text>
+              <Text style={styles.successDetailText}>
+                <Text style={styles.successDetailLabel}>Amount Paid:</Text> €{booking?.servicePrice}
+              </Text>
+            </View>
+            <Text style={styles.successMessage}>
+              Your booking has been confirmed and marked as paid.
+            </Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={() => {
+                console.log('Success modal closed, returning to previous screen');
+                setShowSuccessModal(false);
+                router.back();
+              }}
+            >
+              <Text style={styles.successButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </>
   );
@@ -494,7 +579,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  confirmButton: {
+  payButton: {
     backgroundColor: '#4A90E2',
     borderRadius: 12,
     padding: 16,
@@ -503,8 +588,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     marginTop: 16,
+    marginBottom: 24,
   },
-  confirmButtonText: {
+  payButtonDisabled: {
+    opacity: 0.7,
+  },
+  payButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
@@ -580,21 +669,88 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#E5E5EA',
   },
-  payButton: {
-    backgroundColor: '#4A90E2',
-    borderRadius: 12,
-    padding: 16,
+  paymentNote: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  paymentNoteText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+    flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
-    gap: 8,
+    alignItems: 'center',
   },
-  payButtonDisabled: {
-    opacity: 0.7,
+  successModal: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
   },
-  payButtonText: {
-    color: '#fff',
+  successIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#4A90E2',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  successDetails: {
+    width: '100%',
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 8,
+  },
+  successDetailText: {
     fontSize: 16,
-    fontWeight: '600',
+    marginBottom: 8,
+    color: '#333',
+  },
+  successDetailLabel: {
+    fontWeight: 'bold',
+    color: '#4A90E2',
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#4CAF50',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  successButton: {
+    backgroundColor: '#4A90E2',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  successButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 }); 

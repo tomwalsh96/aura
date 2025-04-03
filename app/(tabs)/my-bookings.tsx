@@ -13,6 +13,7 @@ interface Booking {
   date: string;
   startTime: string;
   status: string;
+  isPaid: boolean;
 }
 
 export default function MyBookingsScreen() {
@@ -100,8 +101,8 @@ export default function MyBookingsScreen() {
     >
       <View style={styles.bookingHeader}>
         <Text style={styles.businessName}>{item.businessName}</Text>
-        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-          <Text style={styles.statusText}>{item.status}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.isPaid) }]}>
+          <Text style={styles.statusText}>{item.isPaid ? 'Paid' : 'Not Paid'}</Text>
         </View>
       </View>
       
@@ -136,17 +137,8 @@ export default function MyBookingsScreen() {
     </TouchableOpacity>
   );
 
-  const getStatusColor = (status: string): string => {
-    switch (status.toLowerCase()) {
-      case 'confirmed':
-        return '#E3F2FD';
-      case 'completed':
-        return '#E8F5E9';
-      case 'cancelled':
-        return '#FFEBEE';
-      default:
-        return '#F5F5F5';
-    }
+  const getStatusColor = (isPaid: boolean): string => {
+    return isPaid ? '#E8F5E9' : '#FFEBEE';
   };
 
   return (

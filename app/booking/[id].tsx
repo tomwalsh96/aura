@@ -44,13 +44,13 @@ interface BookingData {
   servicePrice: number;
   serviceDuration: number;
   userId: string;
-  userEmail: string | null;
+  userEmail?: string;
   date: string;
   startTime: string;
   duration: number;
-  status: string;
-  paymentStatus: string;
-  paymentDate: string;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  paymentStatus: 'unpaid' | 'paid';
+  paymentDate?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -226,55 +226,21 @@ const usePayment = (
   business: Business | null,
   isTimeSlotAvailable: (slot: TimeSlot, date: string) => boolean
 ) => {
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [cardholderName, setCardholderName] = useState('');
-  const [processingPayment, setProcessingPayment] = useState(false);
-  const [cardNumberError, setCardNumberError] = useState('');
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [processingBooking, setProcessingBooking] = useState(false);
 
-  const handlePaymentSubmit = async () => {
+  const handleBookingSubmit = async () => {
     if (!selectedService || !selectedStaff || !selectedTimeSlot || !auth.currentUser) {
-      Alert.alert('Error', 'Please fill in all payment details');
-      return;
-    }
-
-    // Validate payment details
-    if (!cardNumber || !expiryDate || !cvv || !cardholderName) {
-      Alert.alert('Error', 'Please fill in all payment details');
-      return;
-    }
-
-    // Basic card number validation (16 digits)
-    if (!/^\d{16}$/.test(cardNumber)) {
-      setCardNumberError('Please enter a valid 16-digit card number');
-      return;
-    }
-
-    // Basic expiry date validation (MM/YY format)
-    if (!/^(0[1-9]|1[0-2])\/([0-9]{2})$/.test(expiryDate)) {
-      Alert.alert('Error', 'Please enter a valid expiry date (MM/YY)');
-      return;
-    }
-
-    // Basic CVV validation (3 or 4 digits)
-    if (!/^\d{3,4}$/.test(cvv)) {
-      Alert.alert('Error', 'Please enter a valid CVV');
+      Alert.alert('Error', 'Please fill in all booking details');
       return;
     }
 
     try {
-      setProcessingPayment(true);
+      setProcessingBooking(true);
 
-      // Here you would typically integrate with a payment processor
-      // For now, we'll simulate a successful payment
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      const selectedDateStr = selectedDate.toISOString().split('T')[0];
-      
       // Check if the selected time slot is still available
+      const selectedDateStr = selectedDate.toISOString().split('T')[0];
       if (!isTimeSlotAvailable(selectedTimeSlot, selectedDateStr)) {
         Alert.alert('Error', 'This time slot is no longer available. Please select another time.');
         return;
@@ -296,13 +262,12 @@ const usePayment = (
         servicePrice: selectedService.price,
         serviceDuration: selectedService.duration,
         userId: auth.currentUser.uid,
-        userEmail: auth.currentUser.email,
+        userEmail: auth.currentUser.email || undefined,
         date: selectedDateStr,
         startTime: selectedTimeSlot.startTime,
         duration: selectedService.duration,
         status: 'confirmed',
-        paymentStatus: 'paid',
-        paymentDate: new Date().toISOString(),
+        paymentStatus: 'unpaid',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -321,33 +286,23 @@ const usePayment = (
       // Commit the batch
       await batch.commit();
 
-      setShowPaymentModal(false);
+      setShowConfirmationModal(false);
       setShowSuccessModal(true);
     } catch (error) {
-      console.error('Error processing payment:', error);
-      Alert.alert('Error', 'Failed to process payment. Please try again.');
+      console.error('Error creating booking:', error);
+      Alert.alert('Error', 'Failed to create booking. Please try again.');
     } finally {
-      setProcessingPayment(false);
+      setProcessingBooking(false);
     }
   };
 
   return {
-    cardNumber,
-    setCardNumber,
-    expiryDate,
-    setExpiryDate,
-    cvv,
-    setCvv,
-    cardholderName,
-    setCardholderName,
-    processingPayment,
-    cardNumberError,
-    setCardNumberError,
-    showPaymentModal,
-    setShowPaymentModal,
+    showConfirmationModal,
+    setShowConfirmationModal,
     showSuccessModal,
     setShowSuccessModal,
-    handlePaymentSubmit
+    processingBooking,
+    handleBookingSubmit
   };
 };
 
@@ -561,41 +516,23 @@ const DateTimeSelection = ({
   </View>
 );
 
-const PaymentModal = ({
+const ConfirmationModal = ({
   visible,
   onClose,
   selectedService,
+  selectedStaff,
   selectedDate,
   selectedTimeSlot,
-  cardNumber,
-  setCardNumber,
-  expiryDate,
-  setExpiryDate,
-  cvv,
-  setCvv,
-  cardholderName,
-  setCardholderName,
-  processingPayment,
-  cardNumberError,
-  setCardNumberError,
+  processingBooking,
   onSubmit
 }: {
   visible: boolean,
   onClose: () => void,
   selectedService: Service | null,
+  selectedStaff: StaffMember | null,
   selectedDate: Date,
   selectedTimeSlot: TimeSlot | null,
-  cardNumber: string,
-  setCardNumber: (value: string) => void,
-  expiryDate: string,
-  setExpiryDate: (value: string) => void,
-  cvv: string,
-  setCvv: (value: string) => void,
-  cardholderName: string,
-  setCardholderName: (value: string) => void,
-  processingPayment: boolean,
-  cardNumberError: string,
-  setCardNumberError: (value: string) => void,
+  processingBooking: boolean,
   onSubmit: () => void
 }) => (
   <Modal
@@ -610,7 +547,7 @@ const PaymentModal = ({
     >
       <View style={styles.modalContent}>
         <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Payment Details</Text>
+          <Text style={styles.modalTitle}>Confirm Booking</Text>
           <TouchableOpacity
             onPress={onClose}
             style={styles.closeButton}
@@ -634,74 +571,30 @@ const PaymentModal = ({
               })}
             </Text>
             <Text style={styles.paymentSummaryText}>{selectedTimeSlot?.startTime}</Text>
+            <Text style={styles.paymentSummaryText}>{selectedStaff?.name}</Text>
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Card Number</Text>
-            <TextInput
-              style={[styles.input, cardNumberError ? styles.inputError : null]}
-              placeholder="1234567890123456"
-              value={cardNumber}
-              onChangeText={(text) => {
-                setCardNumber(text);
-                setCardNumberError('');
-              }}
-              keyboardType="numeric"
-              maxLength={16}
-            />
-            {cardNumberError ? <Text style={styles.errorText}>{cardNumberError}</Text> : null}
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.inputLabel}>Expiry Date</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="MM/YY"
-                value={expiryDate}
-                onChangeText={setExpiryDate}
-                maxLength={5}
-              />
-            </View>
-            <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
-              <Text style={styles.inputLabel}>CVV</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="123"
-                value={cvv}
-                onChangeText={setCvv}
-                keyboardType="numeric"
-                maxLength={4}
-                secureTextEntry
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Cardholder Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="John Doe"
-              value={cardholderName}
-              onChangeText={setCardholderName}
-              autoCapitalize="words"
-            />
+          <View style={styles.infoContainer}>
+            <Ionicons name="information-circle-outline" size={24} color="#4A90E2" style={styles.infoIcon} />
+            <Text style={styles.infoText}>
+              Your booking will be confirmed immediately. You can complete the payment in the My Bookings tab.
+            </Text>
           </View>
         </ScrollView>
 
         <View style={styles.modalFooter}>
           <TouchableOpacity
-            style={[styles.payButton, processingPayment && styles.payButtonDisabled]}
+            style={[styles.confirmButton, processingBooking && styles.confirmButtonDisabled]}
             onPress={onSubmit}
-            disabled={processingPayment}
+            disabled={processingBooking}
           >
-            {processingPayment ? (
+            {processingBooking ? (
               <ActivityIndicator color="#fff" />
             ) : (
               <>
-                <Ionicons name="card-outline" size={20} color="#fff" />
-                <Text style={styles.payButtonText}>
-                  Pay €{selectedService?.price}
+                <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
+                <Text style={styles.confirmButtonText}>
+                  Confirm Booking
                 </Text>
               </>
             )}
@@ -758,6 +651,12 @@ const SuccessModal = ({
             <Text style={styles.successDetailLabel}>Time:</Text> {selectedTimeSlot?.startTime}
           </Text>
         </View>
+        <View style={styles.paymentInfoContainer}>
+          <Ionicons name="card-outline" size={24} color="#4A90E2" style={styles.paymentInfoIcon} />
+          <Text style={styles.paymentInfoText}>
+            Your booking is confirmed but not yet paid. You can complete the payment in the My Bookings tab.
+          </Text>
+        </View>
         <TouchableOpacity
           style={styles.successButton}
           onPress={onClose}
@@ -785,22 +684,12 @@ const BookingScreen = () => {
   const { business, staff, services, bookings, loading, error } = useBusinessData(id as string);
   const { availableTimeSlots, isTimeSlotAvailable } = useTimeSlots(selectedStaff, selectedService, selectedDate, bookings);
   const {
-    cardNumber,
-    setCardNumber,
-    expiryDate,
-    setExpiryDate,
-    cvv,
-    setCvv,
-    cardholderName,
-    setCardholderName,
-    processingPayment,
-    cardNumberError,
-    setCardNumberError,
-    showPaymentModal,
-    setShowPaymentModal,
+    showConfirmationModal,
+    setShowConfirmationModal,
     showSuccessModal,
     setShowSuccessModal,
-    handlePaymentSubmit
+    processingBooking,
+    handleBookingSubmit
   } = usePayment(
     selectedService,
     selectedStaff,
@@ -899,7 +788,7 @@ const BookingScreen = () => {
               styles.bookButton,
               (!selectedService || !selectedStaff || !selectedTimeSlot) && styles.bookButtonDisabled
             ]}
-            onPress={() => setShowPaymentModal(true)}
+            onPress={() => setShowConfirmationModal(true)}
             disabled={!selectedService || !selectedStaff || !selectedTimeSlot}
           >
             <Text style={styles.bookButtonText}>Confirm Booking</Text>
@@ -907,24 +796,15 @@ const BookingScreen = () => {
         </View>
       </ScrollView>
 
-      <PaymentModal
-        visible={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
+      <ConfirmationModal
+        visible={showConfirmationModal}
+        onClose={() => setShowConfirmationModal(false)}
         selectedService={selectedService}
+        selectedStaff={selectedStaff}
         selectedDate={selectedDate}
         selectedTimeSlot={selectedTimeSlot}
-        cardNumber={cardNumber}
-        setCardNumber={setCardNumber}
-        expiryDate={expiryDate}
-        setExpiryDate={setExpiryDate}
-        cvv={cvv}
-        setCvv={setCvv}
-        cardholderName={cardholderName}
-        setCardholderName={setCardholderName}
-        processingPayment={processingPayment}
-        cardNumberError={cardNumberError}
-        setCardNumberError={setCardNumberError}
-        onSubmit={handlePaymentSubmit}
+        processingBooking={processingBooking}
+        onSubmit={handleBookingSubmit}
       />
 
       <SuccessModal
@@ -1296,31 +1176,25 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 4,
   },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#f8f8f8',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 16,
-  },
-  row: {
+  infoContainer: {
     flexDirection: 'row',
-    marginBottom: 16,
+    alignItems: 'flex-start',
+    backgroundColor: '#E8F5E9',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 16,
   },
-  modalFooter: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
+  infoIcon: {
+    marginRight: 12,
+    marginTop: 2,
   },
-  payButton: {
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  confirmButton: {
     backgroundColor: '#4A90E2',
     borderRadius: 12,
     padding: 16,
@@ -1328,18 +1202,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    marginTop: 16,
+    marginBottom: 24,
   },
-  payButtonDisabled: {
+  confirmButtonDisabled: {
     opacity: 0.7,
   },
-  payButtonText: {
+  confirmButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  inputError: {
-    borderColor: '#FF3B30',
-    borderWidth: 1,
+  paymentInfoContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#E8F5E9',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 24,
+  },
+  paymentInfoIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  paymentInfoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  modalFooter: {
+    padding: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
   },
 });
 
