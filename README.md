@@ -9,20 +9,20 @@ This project started as a challenge (see attached brief image): could I build an
 Building this was a significant learning curve, as both React Native and integrating LLMs were new territory for me. Here's how it unfolded:
 
 * **Getting Started:** Began with a simple React Native app using dummy data just to find my feet.
-* **Voice Input?** Tried some on-device speech-to-text tools, but accuracy wasn't great. Research pointed towards cloud-based solutions like Google's Text-to-Speech.
-* **Finding a Backend:** Realized I'd need a backend for processing requests, which led me to Firebase.
-* **First Chatbot Attempt:** Discovered a Firebase extension that sets up a basic chatbot with Firestore, Functions, and Gemini. It was a great intro to Google AI Studio but too limited for function calling or handling voice directly.
+* **Voice Input?** Tried some on-device speech-to-text tools, but accuracy wasn't great. Use of gemini deep research pointed towards cloud-based solutions like Google's Text-to-Speech.
+* **Finding a Backend:** For google text-to-speech, I would need a backend, which led me to Firebase.
+* **First Chatbot Attempt:** Discovered a Firebase extension that sets up a basic chatbot with Firestore, Functions, and Gemini. It was a great intro to Google AI Studio but too limited as it couldn't handle function calling or handling voice directly.
 * **Chatbot V2 - Getting Serious:** Built a custom chatbot talking directly to the Gemini API. This meant:
     * Figuring out function calling in Google AI Studio.
     * Designing a proper data structure in Firestore (businesses, staff, services, bookings).
     * Adding manual booking features and Firebase Auth for user management.
     * (Also quickly built a profile editor when I needed a break from the chatbot!)
-* **The LLM Struggle is Real:** V2 development hit a wall. The initial Gemini model (`gemini-pro` or `gemini-flash` - *adjust*) started hallucinating frequently and became unpredictable as I added more context and functions. It got *worse* with more detail, which was frustrating!
-* **Model Upgrade & Chatbot V3:** Switched to a more advanced model (`gemini-1.5-pro` - *adjust*) after finding it handled complex instructions better in Google AI Studio. I decided to rebuild the chat (V3) with a simpler approach, focusing on just three key functions: getting business info, finding available slots, and confirming a booking.
+* **The LLM Struggle is Real:** V2 development hit a wall. The initial Gemini model gemini-2.0-flash started hallucinating frequently and became unpredictable as I added more context and functions. It got *worse* with more detail, which was frustrating!
+* **Model Upgrade & Chatbot V3:** Switched to a more advanced model gemini-2.5-pro-exp-03-25 after finding it handled complex instructions better in Google AI Studio. I decided to rebuild the chat (V3) with a simpler approach, focusing on just three key functions: getting business info, finding available slots, and confirming a booking. This would not be scalable however, as it just fetches all data. A system of filtering would be needed, but i previously found this to create so many pitfalls and I decided not worth it for a demo app.
 * **Extra Features & Roadblocks:**
     * Tried using location data to find nearby salons, but the model wouldn't reliably use it (maybe a safety feature?).
     * Implemented payments, but couldn't get the LLM to trigger a payment popup securely. The solution: the chatbot makes the booking (unpaid) and tells the user to complete payment in their "My Bookings" area. Applied this to manual bookings too for consistency.
-* **Testing Troubles:** Ran into issues mocking Firebase for tests. Since this is a PoC, I paused deep testing, but it's essential for a real product.
+* **Testing Troubles:** Ran into issues mocking Firebase for tests. Since this is a PoC, I paused testing, but it's essential for a real product.
 
 ## How it Meets the Brief
 
@@ -73,19 +73,14 @@ Follow these steps to set up and run the project locally.
     * Edit the `.env` file and add your Google Cloud API key. This key is used for interacting with Google AI Studio / Gemini models.
         ```dotenv
         # .env
-        GOOGLE_CLOUD_API_KEY=your_google_cloud_api_key_here
+        GOOGLE_CLOUD_API_KEY=your_google_ai_studio_api_key_here
         ```
     * **To get a Google Cloud API Key:**
-        * Visit the [Google Cloud Console](https://console.cloud.google.com/).
-        * Create a project or select an existing one.
-        * Ensure the relevant APIs (like the Vertex AI API for Gemini) are enabled under "APIs & Services".
-        * Create an API key under "APIs & Services" > "Credentials".
-        * **Important:** Restrict your API key in the Google Cloud Console for security, limiting its usage to the necessary APIs and potentially IP addresses/app identifiers.
-    * *(Add any other required environment variables here, e.g., Firebase config if needed)*
+        * Visit the [Google AI Studio](https://aistudio.google.com/).
 
 4.  **Start the app:**
     ```bash
-    npx expo start
+    npm run start
     ```
 
 5.  **Run the app:**
