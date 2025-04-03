@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, SchemaType, Tool } from '@google/generative-ai';
-import { ChatMessage } from '../types/chat';
+import { ChatMessage } from '@/types/chat';
 import { db } from '../firebase-config';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,7 +13,9 @@ import {
   Timestamp, 
   addDoc,
   DocumentData,
-  setDoc
+  setDoc,
+  serverTimestamp,
+  updateDoc
 } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import * as FileSystem from 'expo-file-system';
@@ -203,6 +205,7 @@ export class AIService {
     - NEVER EVER respond with a success message about a booking without calling create_booking
     - ALWAYS use exact names from the business data
     - Avoid saying you are going to do something, just do it directly
+    - Don't say you can't process audio, you can. If you don't understand the user, just say you don't understand and ask them to repeat.
     
     Initial greeting and booking process explanation:
     "Hi! I'm Aura, your friendly booking assistant.
@@ -462,10 +465,10 @@ export class AIService {
         if (functionResponseData) {
           switch (name) {
             case 'list_businesses':
-              const businesses = functionResponseData as any[];
+          const businesses = functionResponseData as any[];
               if (businesses.length > 0) {
-                formattedResponse = 'Here are the available businesses:\n\n';
-                businesses.forEach(business => {
+            formattedResponse = 'Here are the available businesses:\n\n';
+            businesses.forEach(business => {
                   formattedResponse += `• ${business.businessName} (${business.businessRating}★)\n`;
                   business.services.forEach((service: any) => {
                     formattedResponse += `  - ${service.serviceName}: €${service.servicePrice}\n`;
@@ -477,7 +480,7 @@ export class AIService {
                   formattedResponse += '\n';
                 });
                 formattedResponse += 'What would you like to book?';
-              } else {
+            } else {
                 formattedResponse = 'No businesses found matching your criteria. Please try a different search.';
               }
               break;
@@ -502,7 +505,7 @@ export class AIService {
                   formattedResponse += '\n';
                 });
                 formattedResponse += 'Please select a time slot to proceed with your booking.';
-              } else {
+            } else {
                 formattedResponse = `No available slots found for ${args.serviceName} at ${args.businessName} on ${args.date}. Would you like to try a different date?`;
               }
               break;
@@ -510,7 +513,7 @@ export class AIService {
             case 'create_booking':
               if (functionResponseData && functionResponseData.id) {
                 formattedResponse = `Successfully created your booking for ${args.serviceName} at ${args.businessName} on ${args.date} at ${args.startTime}. Would you like to book anything else?`;
-              } else {
+          } else {
                 formattedResponse = 'Sorry, I was unable to create your booking. Please try again or select a different time slot.';
               }
               break;
@@ -545,7 +548,7 @@ export class AIService {
         if (!finalResponse || finalResponse.trim() === '') {
           console.log('Using formatted response as final response');
           this.addMessage('model', formattedResponse);
-          return formattedResponse;
+        return formattedResponse;
         }
 
         // Only check for booking success phrases if there was no function call
@@ -581,52 +584,24 @@ export class AIService {
         console.log('Added model response to history');
 
         return finalResponse;
-      }
+      } else {
+        // If no function call, extract the text from the model's response
+        const textResponse = response.candidates?.[0]?.content?.parts?.[0]?.text;
+        console.log('Text response from model:', textResponse);
 
-      const finalResponse = response.text();
-      console.log('Final response text:', finalResponse);
-
-      if (!finalResponse || finalResponse.trim() === '') {
-        console.error('Empty direct response:', {
-          message,
-          history: this.history
-        });
-        throw new Error('The model did not generate a response. Please try again.');
-      }
-
-      // Only check for booking success phrases if there was no function call
-      if (!functionCall) {
-        const bookingSuccessPhrases = [
-          'successfully created your booking',
-          'created your booking',
-          'booked your appointment',
-          'confirmed your booking',
-          'booking is confirmed',
-          'booking has been created'
-        ];
-
-        const containsBookingSuccess = bookingSuccessPhrases.some(phrase => 
-          finalResponse.toLowerCase().includes(phrase)
-        );
-
-        if (containsBookingSuccess) {
-          console.log('Model attempted to claim booking success without calling create_booking function. Forcing retry with function call.');
-          
-          // Remove the last message from history (the one claiming success)
-          this.history.pop();
-          
-          // Add a system message to force function call
-          this.addMessage('model', 'I need to properly create your booking using the create_booking function. Please try again.');
-          
-          // Retry the response generation
-          return this.generateResponse(message, isAudio);
+        if (!textResponse || textResponse.trim() === '') {
+          console.error('Empty text response from model:', {
+            message,
+            history: this.history
+          });
+          throw new Error('The model did not generate a response. Please try again.');
         }
+
+        this.addMessage('model', textResponse);
+        console.log('Added model response to history');
+
+        return textResponse;
       }
-
-      this.addMessage('model', finalResponse);
-      console.log('Added model response to history');
-
-      return finalResponse;
 
     } catch (error) {
       console.error('Error in generateResponse:', error);
@@ -673,10 +648,6 @@ export class AIService {
     });
   }
 
-  /**
-   * Executes the list_businesses function
-   * @returns A list of businesses with their services and staff
-   */
   private async executeListBusinesses() {
     try {
       console.log('Starting executeListBusinesses');
@@ -737,14 +708,6 @@ export class AIService {
     }
   }
 
-  /**
-   * Executes the find_available_slots function
-   * @param businessName - The name of the business
-   * @param serviceName - The name of the service
-   * @param date - The date to find slots for (YYYY-MM-DD format)
-   * @param staffName - Optional: The name of a specific staff member
-   * @returns A list of available time slots
-   */
   private async executeFindAvailableSlots(
     businessName: string,
     serviceName: string,
@@ -778,7 +741,7 @@ export class AIService {
       
       if (serviceSnapshot.empty) {
         console.log('No service found with name:', serviceName);
-        return [];
+      return [];
       }
       
       const service = serviceSnapshot.docs[0].data() as FirestoreService;
@@ -930,15 +893,6 @@ export class AIService {
     }
   }
 
-  /**
-   * Executes the create_booking function
-   * @param businessName - The name of the business
-   * @param staffName - The name of the staff member
-   * @param serviceName - The name of the service
-   * @param date - The date to book (YYYY-MM-DD format)
-   * @param startTime - The start time of the booking (HH:mm format)
-   * @returns The created booking or null if failed
-   */
   private async executeCreateBooking(
     businessName: string,
     staffName: string,
@@ -1081,6 +1035,50 @@ export class AIService {
     } catch (error) {
       console.error('Error in executeCreateBooking:', error);
       return null;
+    }
+  }
+
+  async confirmBooking(bookingId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Get the current user
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      // Get the user's pending bookings
+      const userBookingsRef = collection(db, 'users', currentUser.uid, 'bookings');
+      const bookingDoc = await getDoc(doc(userBookingsRef, bookingId));
+
+      if (!bookingDoc.exists()) {
+        return { success: false, error: 'Booking not found' };
+      }
+
+      const bookingData = bookingDoc.data();
+
+      // Create the booking in the business collection
+      const businessBookingRef = doc(collection(db, 'businesses', bookingData.businessId, 'bookings'), bookingId);
+      await setDoc(businessBookingRef, {
+        ...bookingData,
+        status: 'confirmed',
+        updatedAt: serverTimestamp()
+      });
+
+      // Update the booking in the user's collection
+      await updateDoc(doc(userBookingsRef, bookingId), {
+        status: 'confirmed',
+        updatedAt: serverTimestamp()
+      });
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error confirming booking:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'An unexpected error occurred' 
+      };
     }
   }
 } 

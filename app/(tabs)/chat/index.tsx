@@ -7,18 +7,15 @@ import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LocationService } from "@/services/locationService";
+import PaymentModal from '@/components/ui/PaymentModal';
+import { useRouter } from 'expo-router';
+import { GOOGLE_AI_KEY } from '@env';
 
 interface Message {
   id: string;
-  prompt: string;
-  response?: string;
-  status: {
-    state: "PROCESSING" | "COMPLETED" | "ERROR";
-  };
-  error?: string;
-  audioUri?: string;
+  text: string;
+  sender: 'user' | 'ai' | 'system';
   duration?: number;
-  role: string;
 }
 
 export default function ChatScreen() {
@@ -41,6 +38,11 @@ export default function ChatScreen() {
   const [showCancelUI, setShowCancelUI] = useState(false);
   const cancelThreshold = 100; // pixels to slide before canceling
   const [playbackPosition, setPlaybackPosition] = useState<Record<string, number>>({});
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingBooking, setPendingBooking] = useState<any>(null);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipTimeout = useRef<NodeJS.Timeout | null>(null);
+  const router = useRouter();
 
   const panResponder = useRef(
     PanResponder.create({
@@ -70,7 +72,7 @@ export default function ChatScreen() {
 
   useEffect(() => {
     // Initialize AI service with your API key
-    aiServiceRef.current = new AIService(process.env.GOOGLE_AI_KEY || "");
+    aiServiceRef.current = new AIService(GOOGLE_AI_KEY || "");
     setupAudio();
 
     // Cleanup function
@@ -143,68 +145,53 @@ export default function ChatScreen() {
     }
   };
 
-  const handleSend = async () => {
-    if (!inputText.trim() || !aiServiceRef.current) return;
-    
-    const now = Date.now();
-    const timeSinceLastMessage = now - lastMessageTime;
-    const hasProcessingMessage = messages.some(msg => msg.status.state === "PROCESSING");
-
-    if (hasProcessingMessage && timeSinceLastMessage < 30000) {
-      return;
-    }
-
-    setIsSending(true);
-    setIsButtonDisabled(true);
-    setLastMessageTime(now);
-
-    // Add user message immediately
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      prompt: inputText.trim(),
-      status: { state: "COMPLETED" },
-      role: "user",
-    };
-
-    // Add AI loading message immediately
-    const aiMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      prompt: "",
-      status: { state: "PROCESSING" },
-      role: "model",
-    };
-
-    // Add both messages to the UI immediately
-    setMessages(prev => [...prev, userMessage, aiMessage]);
-    setInputText("");
+  const handleSendMessage = async () => {
+    if (!inputText.trim() && !isRecording) return;
 
     try {
-      const response = await aiServiceRef.current.generateResponse(inputText.trim());
-      
-      // Update the AI message with the response
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === aiMessage.id 
-            ? { ...msg, prompt: response, status: { state: "COMPLETED" } }
-            : msg
-        )
-      );
+      setIsSending(true);
+      const userMessage = inputText.trim();
+      setInputText("");
+
+      // Add user message to chat immediately
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        text: userMessage,
+        sender: 'user'
+      }]);
+
+      // Add a temporary loading message
+      const loadingMessageId = Date.now().toString();
+      setMessages(prev => [...prev, {
+        id: loadingMessageId,
+        text: "Thinking...",
+        sender: 'ai'
+      }]);
+
+      // Scroll to the bottom to show the loading message
+      flatListRef.current?.scrollToEnd({ animated: true });
+
+      const response = await aiServiceRef.current?.generateResponse(userMessage);
+
+      // Remove the loading message
+      setMessages(prev => prev.filter(msg => msg.id !== loadingMessageId));
+
+      if (response) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          text: response,
+          sender: 'ai'
+        }]);
+      }
     } catch (error) {
-      console.error("Error sending message:", error);
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === aiMessage.id 
-            ? { 
-                ...msg, 
-                error: error instanceof Error ? error.message : 'An unexpected error occurred',
-                status: { state: "ERROR" } 
-              }
-            : msg
-        )
-      );
+      console.error('Error sending message:', error);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        text: 'Sorry, there was an error processing your message. Please try again.',
+        sender: 'system'
+      }]);
     } finally {
       setIsSending(false);
-      setIsButtonDisabled(false);
     }
   };
 
@@ -229,19 +216,16 @@ export default function ChatScreen() {
         // Add user audio message immediately
         const userMessage: Message = {
           id: Date.now().toString(),
-          prompt: "[Audio Message]",
-          status: { state: "COMPLETED" },
-          audioUri: uri,
-          duration,
-          role: "user",
+          text: "[Audio Message]",
+          sender: "user",
+          duration: duration,
         };
 
         // Add AI loading message immediately
         const aiMessage: Message = {
           id: (Date.now() + 1).toString(),
-          prompt: "",
-          status: { state: "PROCESSING" },
-          role: "model",
+          text: "",
+          sender: "ai",
         };
 
         // Add both messages to the UI immediately
@@ -262,7 +246,7 @@ export default function ChatScreen() {
             setMessages(prev => 
               prev.map(msg => 
                 msg.id === aiMessage.id 
-                  ? { ...msg, prompt: response, status: { state: "COMPLETED" } }
+                  ? { ...msg, text: response, sender: "ai" }
                   : msg
               )
             );
@@ -274,8 +258,8 @@ export default function ChatScreen() {
               msg.id === aiMessage.id 
                 ? { 
                     ...msg, 
-                    error: error instanceof Error ? error.message : 'Failed to process voice message',
-                    status: { state: "ERROR" } 
+                    text: error instanceof Error ? error.message : 'Failed to process voice message',
+                    sender: "system"
                   }
                 : msg
             )
@@ -376,12 +360,71 @@ export default function ChatScreen() {
     }
   };
 
+  const handlePaymentComplete = async (paymentDetails: any) => {
+    try {
+      if (!pendingBooking) return;
+
+      const bookingConfirmation = await aiServiceRef.current?.confirmBooking(pendingBooking.id);
+      
+      if (bookingConfirmation?.success) {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          text: `Payment successful! Your booking for ${pendingBooking.serviceName} at ${pendingBooking.businessName} on ${pendingBooking.date} at ${pendingBooking.startTime} has been confirmed.`,
+          sender: 'system'
+        }]);
+        
+        setShowPaymentModal(false);
+        setPendingBooking(null);
+      } else {
+        setMessages(prev => [...prev, {
+          id: Date.now().toString(),
+          text: 'Sorry, there was an error confirming your booking. Please try again.',
+          sender: 'system'
+        }]);
+      }
+    } catch (error) {
+      console.error('Error confirming booking:', error);
+      setMessages(prev => [...prev, {
+        id: Date.now().toString(),
+        text: 'Sorry, there was an error confirming your booking. Please try again.',
+        sender: 'system'
+      }]);
+    }
+  };
+
+  const handleMicPress = () => {
+    if (isButtonDisabled) return;
+    
+    // Show tooltip
+    setShowTooltip(true);
+    
+    // Hide tooltip after 2 seconds
+    if (tooltipTimeout.current) {
+      clearTimeout(tooltipTimeout.current);
+    }
+    
+    tooltipTimeout.current = setTimeout(() => {
+      setShowTooltip(false);
+    }, 2000);
+  };
+
+  const handleMicLongPress = () => {
+    if (isButtonDisabled) return;
+    startRecording();
+  };
+
+  const handleMicPressOut = () => {
+    if (isRecording) {
+      stopRecording(false);
+    }
+  };
+
   const renderMessage = ({ item }: { item: Message }) => {
-    const isUser = item.role === 'user';
-    const isAudio = item.audioUri !== undefined;
-    const isProcessing = item.status?.state === "PROCESSING";
-    const isPlayingThis = isPlaying === item.audioUri;
-    const currentPosition = playbackPosition[item.audioUri || ''] || 0;
+    const isUser = item.sender === "user";
+    const isAudio = item.text.startsWith("[Audio Message]");
+    const isProcessing = item.text === "Thinking...";
+    const isPlayingThis = isPlaying === item.text;
+    const currentPosition = playbackPosition[item.text] || 0;
 
     return (
       <View key={item.id} style={[
@@ -393,7 +436,7 @@ export default function ChatScreen() {
           <View style={styles.audioMessageContainer}>
             <TouchableOpacity 
               style={styles.audioPlayButton}
-              onPress={() => handlePlayAudio(item.audioUri!)}
+              onPress={() => handlePlayAudio(item.text)}
             >
               <Ionicons 
                 name={isPlayingThis ? "pause-circle" : "play-circle"} 
@@ -425,15 +468,15 @@ export default function ChatScreen() {
         ) : (
           <View style={styles.textMessageContainer}>
             {isProcessing ? (
-              <View style={styles.processingContainer}>
-                <ActivityIndicator size="small" color={isUser ? "#FFFFFF" : "#007AFF"} />
-                <Text style={[styles.processingText, isUser ? styles.userMessageText : styles.aiMessageText]}>
-                  {isUser ? "Processing voice message..." : "Thinking..."}
+              <View style={[styles.processingContainer, { backgroundColor: '#F0F0F0' }]}>
+                <ActivityIndicator size="small" color="#007AFF" />
+                <Text style={styles.processingText}>
+                  Thinking...
                 </Text>
               </View>
             ) : (
               <Text style={[isUser ? styles.userMessageText : styles.aiMessageText, { flexWrap: 'wrap' }]}>
-                {item.prompt}
+                {item.text}
               </Text>
             )}
           </View>
@@ -447,6 +490,9 @@ export default function ChatScreen() {
     return () => {
       if (buttonDebounceTimeout.current) {
         clearTimeout(buttonDebounceTimeout.current);
+      }
+      if (tooltipTimeout.current) {
+        clearTimeout(tooltipTimeout.current);
       }
     };
   }, []);
@@ -502,13 +548,9 @@ export default function ChatScreen() {
                   isButtonDisabled && !isRecording && styles.actionButtonDisabled,
                   isRecording && styles.actionButtonRecording
                 ]}
-                onPress={inputText.trim() ? handleSend : undefined}
-                onLongPress={startRecording}
-                onPressOut={() => {
-                  if (isRecording) {
-                    stopRecording(false);
-                  }
-                }}
+                onPress={inputText.trim() ? handleSendMessage : handleMicPress}
+                onLongPress={handleMicLongPress}
+                onPressOut={handleMicPressOut}
                 disabled={isButtonDisabled}
               >
                 {isRecording ? (
@@ -553,8 +595,25 @@ export default function ChatScreen() {
               <Text style={styles.cancelText}>Slide to cancel</Text>
             </Animated.View>
           )}
+          {showTooltip && (
+            <View style={styles.tooltip}>
+              <Text style={styles.tooltipText}>Hold to speak</Text>
+            </View>
+          )}
         </KeyboardAvoidingView>
       </SafeAreaView>
+      
+      {showPaymentModal && pendingBooking && (
+        <PaymentModal
+          visible={showPaymentModal}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setPendingBooking(null);
+          }}
+          onPaymentComplete={handlePaymentComplete}
+          bookingDetails={pendingBooking}
+        />
+      )}
     </GestureHandlerRootView>
   );
 }
@@ -711,12 +770,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 4,
-    minWidth: 100,
+    padding: 12,
+    minWidth: 120,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 16,
   },
   processingText: {
     marginLeft: 8,
     fontSize: 16,
+    fontWeight: '500',
   },
   cancelUI: {
     position: 'absolute',
@@ -743,5 +805,20 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#FFFFFF',
     marginLeft: 4,
+  },
+  tooltip: {
+    position: 'absolute',
+    bottom: 60,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    zIndex: 100,
+  },
+  tooltipText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
   },
 }); 
